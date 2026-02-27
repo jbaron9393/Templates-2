@@ -486,6 +486,7 @@
       padding: 6px 20px 16px;
       color: #777;
       font-size: .8rem;
+      text-align: center;
     }
 
 
@@ -731,11 +732,11 @@
         <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
 
         <div class="row" style="margin-bottom:0;">
-          <label>Site Documents (from <code>/docs/word-docs</code>)</label>
+          <label>Site Documents</label>
           <div class="muted">
-            Add files to <code>/docs/word-docs</code>, then define each doc's
-            <code>fileName</code>, <code>title</code>, and <code>category</code> in
-            <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
+            Use the uploader above to add Word documents, PDFs, or images.<br />
+            Enter a Title, select a Category, choose a Type, then click Add to Library.<br /><br />
+            Your document will appear in the left panel and remain saved locally in your browser.
           </div>
         </div>
 
@@ -1194,7 +1195,7 @@ function renderNotesList() {
   if (notesCountEl) notesCountEl.textContent = String(totalNotes);
 
   if (!items.length) {
-    notesListEl.innerHTML = '<div class="muted">No notes yet for this view.</div>';
+    notesListEl.innerHTML = '<div class="muted">Select "Show Notes" to see your stored notes.</div>';
     return;
   }
 
