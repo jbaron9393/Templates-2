@@ -368,6 +368,16 @@
       display: block;
     }
 
+    .source-head {
+      font-size: .72rem;
+      font-weight: 800;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: #777;
+      padding: 2px 2px 0;
+      margin: 6px 0 4px;
+    }
+
     .doc-actions { display:flex; gap:8px; }
     .icon-btn {
       border: 1px solid #ddd;
@@ -569,6 +579,9 @@
     body.dark .subgroup-head {
       color: #b5becc;
       border-bottom-color: #303947;
+    }
+    body.dark .source-head {
+      color: #9da9bb;
     }
     body.dark .category > .cat-head:hover,
     body.dark .doc-item:hover,
@@ -851,7 +864,6 @@ const LOCAL_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 
 const $ = (sel) => document.querySelector(sel);
-const navEl = $("#nav");
 const mainEl = $(".main");
 const panelResizerEl = $("#panelResizer");
 const siteDocsNavEl = $("#siteDocsNav");
@@ -897,6 +909,7 @@ let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
+let bundledCategoryCanonical = new Map([[normalizeCategory("Uncategorized"), "Uncategorized"]]);
 let leftSearchQuery = "";
 let leftSearchDocTextCache = new Map();
 let leftSearchIndexing = new Set();
@@ -1311,15 +1324,32 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
   const wanted = normalizeTextForMatch(quote);
   if (!wanted) return null;
 
+  const wantedSnippets = [];
+  const snippetLength = 120;
+  wantedSnippets.push(wanted);
+  if (wanted.length > snippetLength) {
+    wantedSnippets.push(wanted.slice(0, snippetLength));
+    wantedSnippets.push(wanted.slice(-snippetLength));
+  }
+  const words = wanted.split(' ').filter(Boolean);
+  if (words.length > 8) {
+    wantedSnippets.push(words.slice(0, 8).join(' '));
+    wantedSnippets.push(words.slice(-8).join(' '));
+  }
+
   const candidates = Array.from(previewEl.querySelectorAll('.preview-inner h1, .preview-inner h2, .preview-inner h3, .preview-inner p, .preview-inner li, .preview-inner div, .preview-inner td, .preview-inner th, .preview-inner blockquote'));
   let best = null;
   let bestScore = -1;
 
   for (const el of candidates) {
     const hay = normalizeTextForMatch(el.innerText || el.textContent || '');
-    if (!hay || !hay.includes(wanted)) continue;
+    if (!hay) continue;
 
-    let score = wanted.length;
+    const matchedSnippet = wantedSnippets.find((snippet) => snippet && hay.includes(snippet));
+    if (!matchedSnippet) continue;
+
+    let score = matchedSnippet.length;
+    if (matchedSnippet === wanted) score += 75;
     const before = normalizeTextForMatch(contextBefore);
     const after = normalizeTextForMatch(contextAfter);
     if (before && hay.includes(before)) score += 25;
@@ -1482,12 +1512,38 @@ function groupByCategory(docs) {
 }
 
 function setLibraryStatus() {
-  libStatusEl.textContent = `${bundledStats.docs} docs / ${bundledStats.categories} categories`;
+  const totalDocs = (bundledDocs?.length || 0) + ((state.docs || []).length);
+  const allCategories = new Set();
+  for (const doc of [...(bundledDocs || []), ...(state.docs || [])]) {
+    allCategories.add(normalizeCategory(doc?.category || "Uncategorized"));
+  }
+  libStatusEl.textContent = `${totalDocs} docs / ${allCategories.size} categories`;
 }
 
 
 function normalizeSearchValue(value) {
   return (value || "").toString().trim().toLowerCase();
+}
+
+function normalizeCategory(cat) {
+  return (cat || "Uncategorized")
+    .toString()
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function canonicalCategoryLabel(raw) {
+  const cleaned = (raw || "Uncategorized").toString().trim().replace(/\s+/g, " ") || "Uncategorized";
+  const key = normalizeCategory(cleaned);
+  if (bundledCategoryCanonical.has(key)) return bundledCategoryCanonical.get(key);
+
+  for (const doc of state.docs || []) {
+    const label = (doc?.category || "").toString().trim().replace(/\s+/g, " ");
+    if (label && normalizeCategory(label) === key) return label;
+  }
+
+  return cleaned;
 }
 
 function getLeftSearchDocKey(doc) {
@@ -1529,8 +1585,7 @@ async function queueLeftSearchIndexDoc(doc) {
   } finally {
     leftSearchIndexing.delete(key);
     if (leftSearchQuery) {
-      renderNav();
-      renderSiteDocsNav(bundledDocs);
+      renderUnifiedNav();
       updateLeftSearchMeta();
     }
   }
@@ -1673,96 +1728,170 @@ async function copyToClipboard(text) {
 }
 
 // -------------------- Rendering --------------------
-function renderNav() {
-  navEl.innerHTML = "";
-  const docs = (state.docs || []).filter(matchesLeftSearch);
+function shouldUseBundledSubgroups(categoryLabel, docs) {
+  const normalized = normalizeCategory(categoryLabel);
+  const gynObKey = normalizeCategory("GYN-OB 1&2");
+  if (normalized === gynObKey) return true;
+  return (docs || []).some((doc) => (doc?.fileName || "").toLowerCase().includes("gyn-ob 1&2/"));
+}
 
-  if (!docs.length) {
-    navEl.innerHTML = `<div class="muted">No documents yet. Upload one above.</div>`;
+function createBundledDocItem(doc) {
+  const item = document.createElement("div");
+  item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+  item.innerHTML = `
+    <div class="doc-meta">
+      <div class="doc-title">${escapeHtml(doc.title)}</div>
+      <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+    </div>
+  `;
+  item.addEventListener("click", () => loadSiteDoc(doc));
+  return item;
+}
+
+function createUploadedDocItem(doc) {
+  const item = document.createElement("div");
+  item.className = "doc-item" + (doc.id === activeDocId ? " active" : "");
+  item.innerHTML = `
+    <div class="doc-meta">
+      <div class="doc-title">${escapeHtml(doc.title || doc.fileName || "Untitled")}</div>
+      <div class="doc-sub">${escapeHtml(doc.fileName || "")}</div>
+    </div>
+    <div class="doc-actions">
+      <button class="icon-btn" title="Rename" data-action="rename">✎</button>
+      <button class="icon-btn" title="Delete" data-action="delete">🗑</button>
+    </div>
+  `;
+
+  item.addEventListener("click", async (e) => {
+    const btn = e.target.closest("button");
+    if (btn) {
+      const action = btn.dataset.action;
+      if (action === "delete") return deleteDoc(doc.id);
+      if (action === "rename") return renameDoc(doc.id);
+      return;
+    }
+    await loadDoc(doc.id);
+  });
+
+  return item;
+}
+
+function appendBundledSection(listEl, docs, showHeader) {
+  const items = stableSortDocs(docs || []);
+  if (!items.length) return;
+
+  if (showHeader) {
+    const header = document.createElement("div");
+    header.className = "source-head";
+    header.textContent = "Bundled";
+    listEl.appendChild(header);
+  }
+
+  if (!shouldUseBundledSubgroups(items[0]?.category, items)) {
+    for (const doc of items) listEl.appendChild(createBundledDocItem(doc));
+    return;
+  }
+
+  const groupedItems = groupDocsBySubgroup(items);
+  for (const subgroup of groupedItems) {
+    const subgroupEl = document.createElement("div");
+    const hasActiveDoc = subgroup.docs.some((doc) => doc.path === activeSiteDocPath);
+    subgroupEl.className = "subgroup" + (hasActiveDoc ? " open" : "");
+
+    const subgroupHead = document.createElement("div");
+    subgroupHead.className = "subgroup-head";
+    subgroupHead.innerHTML = `
+      <span>${escapeHtml(subgroup.name)}</span>
+      <span class="cat-count">${subgroup.docs.length}</span>
+    `;
+    subgroupHead.addEventListener("click", () => {
+      subgroupEl.classList.toggle("open");
+    });
+    subgroupEl.appendChild(subgroupHead);
+
+    const subgroupBody = document.createElement("div");
+    subgroupBody.className = "subgroup-body";
+
+    for (const doc of subgroup.docs) subgroupBody.appendChild(createBundledDocItem(doc));
+
+    subgroupEl.appendChild(subgroupBody);
+    listEl.appendChild(subgroupEl);
+  }
+}
+
+function appendUploadedSection(listEl, docs, showHeader) {
+  const items = stableSortDocs(docs || []);
+  if (!items.length) return;
+
+  if (showHeader) {
+    const header = document.createElement("div");
+    header.className = "source-head";
+    header.textContent = "Uploaded";
+    listEl.appendChild(header);
+  }
+
+  for (const doc of items) listEl.appendChild(createUploadedDocItem(doc));
+}
+
+function renderUnifiedNav() {
+  siteDocsNavEl.innerHTML = "";
+
+  const combinedDocs = [
+    ...bundledDocs.map((doc) => ({ ...doc, source: "bundled" })),
+    ...(state.docs || []).map((doc) => ({ ...doc, source: "uploaded" }))
+  ];
+
+  if (!combinedDocs.length) {
+    siteDocsNavEl.innerHTML = `<div class="muted">No documents listed yet.</div>`;
     updateLeftSearchMeta();
     return;
   }
 
-  const groups = groupByCategory(docs);
-
-  for (const [cat, items] of groups) {
-    const catEl = document.createElement("div");
-    catEl.className = "category";
-
-    const head = document.createElement("div");
-    head.className = "cat-head";
-    head.innerHTML = `
-      <span class="cat-head-title">${escapeHtml(cat)}</span>
-      <span class="cat-count">${items.length}</span>
-    `;
-    head.addEventListener("click", () => toggleCategory(catEl, navEl));
-    if (leftSearchQuery) catEl.classList.add("open");
-
-    const list = document.createElement("div");
-    list.className = "doc-list";
-
-    for (const d of items) {
-      const item = document.createElement("div");
-      item.className = "doc-item" + (d.id === activeDocId ? " active" : "");
-      item.innerHTML = `
-        <div class="doc-meta">
-          <div class="doc-title">${escapeHtml(d.title || d.fileName || "Untitled")}</div>
-          <div class="doc-sub">${escapeHtml(d.fileName || "")}</div>
-        </div>
-        <div class="doc-actions">
-          <button class="icon-btn" title="Rename" data-action="rename">✎</button>
-          <button class="icon-btn" title="Delete" data-action="delete">🗑</button>
-        </div>
-      `;
-
-      // clicking the body loads doc; clicking buttons does actions
-      item.addEventListener("click", async (e) => {
-        const btn = e.target.closest("button");
-        if (btn) {
-          const action = btn.dataset.action;
-          if (action === "delete") return deleteDoc(d.id);
-          if (action === "rename") return renameDoc(d.id);
-          return;
-        }
-        await loadDoc(d.id);
-      });
-
-      list.appendChild(item);
+  const firstSeenCategoryLabel = new Map();
+  for (const doc of combinedDocs) {
+    const rawCategory = (doc.category || "Uncategorized").toString().trim().replace(/\s+/g, " ") || "Uncategorized";
+    const key = normalizeCategory(rawCategory);
+    if (!firstSeenCategoryLabel.has(key)) {
+      firstSeenCategoryLabel.set(key, bundledCategoryCanonical.get(key) || rawCategory);
     }
-
-    catEl.appendChild(head);
-    catEl.appendChild(list);
-    navEl.appendChild(catEl);
   }
 
-  updateLeftSearchMeta();
-}
-
-function renderSiteDocsNav(siteDocs) {
-  const visibleDocs = siteDocs.filter(matchesLeftSearch);
-  siteDocsNavEl.innerHTML = "";
-
-  if (!siteDocs.length) {
-    siteDocsNavEl.innerHTML = `<div class="muted">No bundled docs listed yet.</div>`;
-    return;
-  }
-
+  const visibleDocs = combinedDocs.filter(matchesLeftSearch);
   if (!visibleDocs.length) {
-    siteDocsNavEl.innerHTML = `<div class="muted">No bundled docs match your search.</div>`;
+    siteDocsNavEl.innerHTML = `<div class="muted">No documents match your search.</div>`;
+    updateLeftSearchMeta();
     return;
   }
 
-  const groups = groupByCategory(visibleDocs);
+  const grouped = new Map();
+  for (const doc of visibleDocs) {
+    const rawCategory = (doc.category || "Uncategorized").toString().trim().replace(/\s+/g, " ") || "Uncategorized";
+    const key = normalizeCategory(rawCategory);
+    if (!grouped.has(key)) {
+      const canonicalLabel = bundledCategoryCanonical.get(key) || firstSeenCategoryLabel.get(key) || rawCategory;
+      grouped.set(key, { key, label: canonicalLabel, docs: [] });
+    }
+    grouped.get(key).docs.push(doc);
+  }
 
-  for (const [cat, items] of groups) {
+  const categories = [...grouped.values()].sort((a, b) =>
+    a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" })
+  );
+
+  for (const category of categories) {
     const catEl = document.createElement("div");
     catEl.className = "category";
+
+    const catDocs = category.docs;
+    const bundledItems = catDocs.filter((doc) => doc.source === "bundled");
+    const uploadedItems = catDocs.filter((doc) => doc.source === "uploaded");
+    const showSourceHeaders = bundledItems.length > 0 && uploadedItems.length > 0;
 
     const head = document.createElement("div");
     head.className = "cat-head";
     head.innerHTML = `
-      <span class="cat-head-title">${escapeHtml(cat)}</span>
-      <span class="cat-count">${items.length}</span>
+      <span class="cat-head-title">${escapeHtml(category.label)}</span>
+      <span class="cat-count">${catDocs.length}</span>
     `;
     head.addEventListener("click", () => toggleCategory(catEl, siteDocsNavEl));
     if (leftSearchQuery) catEl.classList.add("open");
@@ -1770,64 +1899,15 @@ function renderSiteDocsNav(siteDocs) {
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    const useSubgroups = cat === "GYN";
-
-    if (!useSubgroups) {
-      for (const doc of items) {
-        const item = document.createElement("div");
-        item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
-        item.innerHTML = `
-          <div class="doc-meta">
-            <div class="doc-title">${escapeHtml(doc.title)}</div>
-            <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
-          </div>
-        `;
-        item.addEventListener("click", () => loadSiteDoc(doc));
-        list.appendChild(item);
-      }
-    } else {
-      const groupedItems = groupDocsBySubgroup(items);
-      for (const subgroup of groupedItems) {
-        const subgroupEl = document.createElement("div");
-        const hasActiveDoc = subgroup.docs.some((doc) => doc.path === activeSiteDocPath);
-        subgroupEl.className = "subgroup" + (hasActiveDoc ? " open" : "");
-
-        const subgroupHead = document.createElement("div");
-        subgroupHead.className = "subgroup-head";
-        subgroupHead.innerHTML = `
-          <span>${escapeHtml(subgroup.name)}</span>
-          <span class="cat-count">${subgroup.docs.length}</span>
-        `;
-        subgroupHead.addEventListener("click", () => {
-          subgroupEl.classList.toggle("open");
-        });
-        subgroupEl.appendChild(subgroupHead);
-
-        const subgroupBody = document.createElement("div");
-        subgroupBody.className = "subgroup-body";
-
-        for (const doc of subgroup.docs) {
-          const item = document.createElement("div");
-          item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
-          item.innerHTML = `
-            <div class="doc-meta">
-              <div class="doc-title">${escapeHtml(doc.title)}</div>
-              <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
-            </div>
-          `;
-          item.addEventListener("click", () => loadSiteDoc(doc));
-          subgroupBody.appendChild(item);
-        }
-
-        subgroupEl.appendChild(subgroupBody);
-        list.appendChild(subgroupEl);
-      }
-    }
+    appendBundledSection(list, bundledItems, showSourceHeaders);
+    appendUploadedSection(list, uploadedItems, showSourceHeaders);
 
     catEl.appendChild(head);
     catEl.appendChild(list);
     siteDocsNavEl.appendChild(catEl);
   }
+
+  updateLeftSearchMeta();
 }
 
 function escapeHtml(str) {
@@ -2062,7 +2142,7 @@ async function loadDoc(docId) {
   activeSiteDocPath = null;
   const ext = getFileExtension(d.fileName);
   previewContentType = ext === ".docx" ? "docx" : "binary";
-  renderNav();
+  renderUnifiedNav();
   renderNotesList();
 
   previewTitleEl.textContent = d.title || "Preview";
@@ -2117,7 +2197,7 @@ async function loadSiteDoc(doc) {
   activeDocId = null;
   activeSiteDocPath = doc.path;
   previewContentType = getFileExtension(doc.fileName) === ".docx" ? "docx" : "binary";
-  renderNav();
+  renderUnifiedNav();
   renderNotesList();
 
   previewTitleEl.textContent = doc.title;
@@ -2164,6 +2244,15 @@ async function loadBundledDocs() {
 
     const payload = await response.json();
     const entries = Array.isArray(payload.files) ? payload.files : [];
+    const indexCategories = Array.isArray(payload.categories) ? payload.categories : [];
+
+    bundledCategoryCanonical = new Map();
+    bundledCategoryCanonical.set(normalizeCategory("Uncategorized"), "Uncategorized");
+    for (const category of indexCategories) {
+      const cleaned = (category || "").toString().trim().replace(/\s+/g, " ");
+      if (!cleaned) continue;
+      bundledCategoryCanonical.set(normalizeCategory(cleaned), cleaned);
+    }
 
     const docs = entries
       .map((entry) => {
@@ -2183,10 +2272,12 @@ async function loadBundledDocs() {
         if (!fileName) return null;
 
         const title = (entry.title || titleFromFileName(fileName)).toString().trim() || titleFromFileName(fileName);
+        const category = (entry.category || "Uncategorized").toString().trim().replace(/\s+/g, " ") || "Uncategorized";
+        const canonicalCategory = bundledCategoryCanonical.get(normalizeCategory(category)) || category;
         return {
           fileName,
           title,
-          category: (entry.category || "Uncategorized").toString().trim() || "Uncategorized",
+          category: canonicalCategory,
           docType: normalizeDocType(entry.docType) || inferDocType({ title, fileName })
         };
       })
@@ -2200,13 +2291,14 @@ async function loadBundledDocs() {
     if (leftSearchQuery) queueLeftSearchIndexAll();
     bundledStats = { docs: docs.length, categories: new Set(docs.map((d) => d.category || "Uncategorized")).size };
     setLibraryStatus();
-    renderSiteDocsNav(docs);
+    renderUnifiedNav();
     updateLeftSearchMeta();
   } catch {
     bundledDocs = [];
+    bundledCategoryCanonical = new Map([[normalizeCategory("Uncategorized"), "Uncategorized"]]);
     bundledStats = { docs: 0, categories: 0 };
     setLibraryStatus();
-    renderSiteDocsNav([]);
+    renderUnifiedNav();
     updateLeftSearchMeta();
   }
 }
@@ -2224,7 +2316,7 @@ async function addDocFromUpload() {
   }
 
   const title = (docTitleEl.value || "").trim() || titleFromFileName(file.name);
-  const category = (docCategoryEl.value || "").trim() || "Uncategorized";
+  const category = canonicalCategoryLabel((docCategoryEl.value || "").trim() || "Uncategorized");
   const docType = normalizeDocType(docTypeEl.value) || inferDocType({ title, fileName: file.name });
 
   // Read file -> base64
@@ -2247,6 +2339,7 @@ async function addDocFromUpload() {
   state.docs.unshift(doc);
   if (leftSearchQuery) queueLeftSearchIndexDoc(doc);
   saveLibrary();
+  setLibraryStatus();
 
   // Reset inputs
   docFileEl.value = "";
@@ -2254,7 +2347,7 @@ async function addDocFromUpload() {
   docCategoryEl.value = category; // keep category for fast adds
   docTypeEl.value = docType;
 
-  renderNav();
+  renderUnifiedNav();
   await loadDoc(doc.id);
 }
 
@@ -2276,7 +2369,8 @@ function deleteDoc(docId) {
   }
   renderNotesList();
   saveLibrary();
-  renderNav();
+  setLibraryStatus();
+  renderUnifiedNav();
 }
 
 function renameDoc(docId) {
@@ -2293,11 +2387,12 @@ function renameDoc(docId) {
   if (newType === null) return;
 
   d.title = (newTitle || "").trim() || d.title;
-  d.category = (newCat || "").trim() || d.category || "Uncategorized";
+  d.category = canonicalCategoryLabel((newCat || "").trim() || d.category || "Uncategorized");
   d.docType = normalizeDocType(newType) || getDocType(d);
 
   saveLibrary();
-  renderNav();
+  setLibraryStatus();
+  renderUnifiedNav();
 
   if (activeDocId === docId) loadDoc(docId);
 }
@@ -2327,7 +2422,7 @@ function importLibraryFromFile(file) {
         return {
           id: existingIds.has(d.id) ? uuid() : (d.id || uuid()),
           title,
-          category: d.category || "Uncategorized",
+          category: canonicalCategoryLabel(d.category || "Uncategorized"),
           fileName,
           addedAtISO: d.addedAtISO || nowISO(),
           docType: normalizeDocType(d.docType) || inferDocType({ title, fileName }),
@@ -2374,7 +2469,8 @@ function importLibraryFromFile(file) {
       if (leftSearchQuery) queueLeftSearchIndexAll();
       saveLibrary();
       saveNotesOverlay();
-      renderNav();
+      setLibraryStatus();
+      renderUnifiedNav();
       renderNotesList();
       renderNoteMarkers();
       refreshNoteCategorySuggestions();
@@ -2520,8 +2616,7 @@ previewEl.addEventListener("keyup", updateAddNoteButtonState);
 leftSearchEl.addEventListener("input", () => {
   leftSearchQuery = normalizeSearchValue(leftSearchEl.value);
   if (leftSearchQuery) queueLeftSearchIndexAll();
-  renderNav();
-  renderSiteDocsNav(bundledDocs);
+  renderUnifiedNav();
   updateLeftSearchMeta();
 });
 btnToTopEl.addEventListener("click", scrollToTop);
@@ -2546,7 +2641,7 @@ previewSearchEl.addEventListener("keydown", (e) => {
 });
 
 // Initial render
-renderNav();
+renderUnifiedNav();
 setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
