@@ -657,7 +657,9 @@ const THEME_KEY = "docViewer.theme.v1";
 const LAYOUT_KEY = "docViewer.layout.v1";
 const DOC_TYPE_OPTIONS = ["template", "how-to", "checklist", "reference", "faq", "other"];
 const MAMMOTH_OPTIONS = {
-  includeDefaultStyleMap: true,
+  // Use direct run formatting from DOCX (e.g. real bold runs) and avoid
+  // style-map remapping that can make whole sections appear bold.
+  includeDefaultStyleMap: false,
   includeEmbeddedStyleMap: false,
   ignoreEmptyParagraphs: false
 };
