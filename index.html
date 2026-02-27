@@ -475,6 +475,23 @@
     .preview table { border-collapse: collapse; width: 100%; margin: 10px 0; }
     .preview td, .preview th { border: 1px solid #ddd; padding: 8px; }
     .preview img { max-width: 100%; height: auto; }
+    .pdf-preview-resizer {
+      width: 100%;
+      min-height: 420px;
+      height: 75vh;
+      max-height: 85vh;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      overflow: auto;
+      resize: vertical;
+      background: #fff;
+    }
+    .pdf-preview-resizer iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
     .site-footer {
@@ -486,6 +503,7 @@
       padding: 6px 20px 16px;
       color: #777;
       font-size: .8rem;
+      text-align: center;
     }
 
 
@@ -731,11 +749,11 @@
         <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
 
         <div class="row" style="margin-bottom:0;">
-          <label>Site Documents (from <code>/docs/word-docs</code>)</label>
+          <label>Site Documents</label>
           <div class="muted">
-            Add files to <code>/docs/word-docs</code>, then define each doc's
-            <code>fileName</code>, <code>title</code>, and <code>category</code> in
-            <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
+            Use the uploader above to add Word documents, PDFs, or images.<br />
+            Enter a <b>Title</b>, select a <b>Category</b>, choose a <b>Type</b>, then click <b>Add to Library</b>.<br /><br />
+            Your document will appear in the left panel and remain saved locally in your browser. You can Export or Import to another browser / window if needed.
           </div>
         </div>
 
@@ -752,7 +770,7 @@
                 <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
                 <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
                   <input id="notesShowAll" type="checkbox" />
-                  <span>All notes</span>
+                  <span>Show Notes</span>
                 </label>
               </div>
               <div class="notes-list" id="notesList"></div>
@@ -1186,14 +1204,15 @@ function filteredNotesForView() {
 
 function renderNotesList() {
   if (!notesListEl) return;
+  const totalNotes = Array.isArray(notesOverlay.notes) ? notesOverlay.notes.length : 0;
   const items = filteredNotesForView()
     .slice()
     .sort((a, b) => (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
 
-  if (notesCountEl) notesCountEl.textContent = String(items.length);
+  if (notesCountEl) notesCountEl.textContent = String(totalNotes);
 
   if (!items.length) {
-    notesListEl.innerHTML = '<div class="muted">No notes yet for this view.</div>';
+    notesListEl.innerHTML = '<div class="muted">Select "Show Notes" to see your stored notes.</div>';
     return;
   }
 
@@ -1805,7 +1824,7 @@ function appendBundledSection(listEl, docs, showHeader) {
   if (showHeader) {
     const header = document.createElement("div");
     header.className = "source-head";
-    header.textContent = "Bundled";
+    header.textContent = "Internal";
     listEl.appendChild(header);
   }
 
@@ -2181,7 +2200,7 @@ async function loadDoc(docId) {
 
   if (ext === ".pdf") {
     const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || "application/pdf" }));
-    setPreviewHtml(`<iframe src="${fileUrl}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(d.title)}"></iframe>`, { objectUrl: fileUrl });
+    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${fileUrl}" title="${escapeHtml(d.title)}"></iframe></div>`, { objectUrl: fileUrl });
     return;
   }
 
@@ -2230,7 +2249,7 @@ async function loadSiteDoc(doc) {
   const ext = getFileExtension(doc.fileName);
 
   if (ext === ".pdf") {
-    setPreviewHtml(`<iframe src="${doc.path}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(doc.title)}"></iframe>`);
+    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${doc.path}" title="${escapeHtml(doc.title)}"></iframe></div>`);
     return;
   }
 
