@@ -1311,15 +1311,32 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
   const wanted = normalizeTextForMatch(quote);
   if (!wanted) return null;
 
+  const wantedSnippets = [];
+  const snippetLength = 120;
+  wantedSnippets.push(wanted);
+  if (wanted.length > snippetLength) {
+    wantedSnippets.push(wanted.slice(0, snippetLength));
+    wantedSnippets.push(wanted.slice(-snippetLength));
+  }
+  const words = wanted.split(' ').filter(Boolean);
+  if (words.length > 8) {
+    wantedSnippets.push(words.slice(0, 8).join(' '));
+    wantedSnippets.push(words.slice(-8).join(' '));
+  }
+
   const candidates = Array.from(previewEl.querySelectorAll('.preview-inner h1, .preview-inner h2, .preview-inner h3, .preview-inner p, .preview-inner li, .preview-inner div, .preview-inner td, .preview-inner th, .preview-inner blockquote'));
   let best = null;
   let bestScore = -1;
 
   for (const el of candidates) {
     const hay = normalizeTextForMatch(el.innerText || el.textContent || '');
-    if (!hay || !hay.includes(wanted)) continue;
+    if (!hay) continue;
 
-    let score = wanted.length;
+    const matchedSnippet = wantedSnippets.find((snippet) => snippet && hay.includes(snippet));
+    if (!matchedSnippet) continue;
+
+    let score = matchedSnippet.length;
+    if (matchedSnippet === wanted) score += 75;
     const before = normalizeTextForMatch(contextBefore);
     const after = normalizeTextForMatch(contextAfter);
     if (before && hay.includes(before)) score += 25;
