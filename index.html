@@ -649,18 +649,6 @@
         </div>
 
         <div class="row">
-          <label>Notes</label>
-          <div class="notes-toolbar">
-            <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
-              <input id="notesShowAll" type="checkbox" />
-              <span>All notes</span>
-            </label>
-          </div>
-          <div class="notes-list" id="notesList"></div>
-        </div>
-
-        <div class="row">
           <div class="nav" id="siteDocsNav"></div>
         </div>
 
@@ -721,7 +709,7 @@
 
         <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
 
-        <div class="category notes-category" id="notesCategory">
+        <div class="category notes-category open" id="notesCategory">
           <div class="cat-head" id="notesHead">
             <span class="cat-head-title">Notes</span>
             <span class="cat-count" id="notesCount">0</span>
@@ -792,15 +780,6 @@
         <button class="btn secondary compact" id="btnNoteClose">Close</button>
       </div>
       <textarea id="noteText" placeholder="Write your note..."></textarea>
-      <div class="modal-row">
-        <label style="display:flex;align-items:center;gap:6px;font-weight:600;"><input type="checkbox" id="notePinned" />Pinned</label>
-        <label for="noteAnchorType" style="font-weight:600;">Attach to:</label>
-        <select id="noteAnchorType" style="max-width:260px;">
-          <option value="selection">Current selection</option>
-          <option value="heading">Current heading</option>
-          <option value="scroll">Current scroll position</option>
-        </select>
-      </div>
       <div class="modal-row" style="justify-content:flex-end;">
         <button class="btn secondary compact" id="btnNoteCancel">Cancel</button>
         <button class="btn compact" id="btnNoteSave">Save Note</button>
@@ -872,8 +851,6 @@ const docTypeEl = $("#docType");
 const noteModalBackdropEl = $("#noteModalBackdrop");
 const noteModalTitleEl = $("#noteModalTitle");
 const noteTextEl = $("#noteText");
-const notePinnedEl = $("#notePinned");
-const noteAnchorTypeEl = $("#noteAnchorType");
 
 let state = loadLibrary();
 let notesOverlay = loadNotesOverlay();
@@ -1086,66 +1063,17 @@ function getCurrentSelectionInfo() {
   };
 }
 
-function getCurrentHeadingAnchor() {
-  const headings = Array.from(previewEl.querySelectorAll('.preview-inner h1, .preview-inner h2, .preview-inner h3'));
-  if (!headings.length) return null;
-  const top = previewEl.getBoundingClientRect().top;
-  let best = headings[0];
-  let bestDist = Infinity;
-  for (const heading of headings) {
-    const dist = Math.abs(heading.getBoundingClientRect().top - top);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = heading;
-    }
-  }
-  return {
-    type: 'heading',
-    selector: getElementSelector(best),
-    quote: (best.textContent || '').trim().slice(0, 180),
-    contextBefore: '',
-    contextAfter: '',
-    scrollTop: previewEl.scrollTop
-  };
-}
-
-function createAnchor(anchorType = 'selection') {
-  if (previewContentType !== 'docx') {
-    return {
-      type: 'scroll',
-      selector: '',
-      quote: '',
-      contextBefore: '',
-      contextAfter: '',
-      scrollTop: previewEl.scrollTop
-    };
-  }
-
-  if (anchorType === 'selection') {
-    const selection = getCurrentSelectionInfo();
-    if (selection) {
-      return {
-        type: 'text-range',
-        selector: selection.selector || selection.heading?.selector || '',
-        quote: selection.selectedText,
-        contextBefore: selection.contextBefore,
-        contextAfter: selection.contextAfter,
-        scrollTop: previewEl.scrollTop
-      };
-    }
-  }
-
-  if (anchorType === 'heading') {
-    const headingAnchor = getCurrentHeadingAnchor();
-    if (headingAnchor) return headingAnchor;
-  }
+function createAnchorFromSelection() {
+  if (previewContentType !== 'docx') return null;
+  const selection = getCurrentSelectionInfo();
+  if (!selection) return null;
 
   return {
-    type: 'scroll',
-    selector: '',
-    quote: '',
-    contextBefore: '',
-    contextAfter: '',
+    type: 'text-range',
+    selector: selection.selector || selection.heading?.selector || '',
+    quote: selection.selectedText,
+    contextBefore: selection.contextBefore,
+    contextAfter: selection.contextAfter,
     scrollTop: previewEl.scrollTop
   };
 }
@@ -1162,7 +1090,7 @@ function renderNotesList() {
   if (!notesListEl) return;
   const items = filteredNotesForView()
     .slice()
-    .sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
+    .sort((a, b) => (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
 
   if (notesCountEl) notesCountEl.textContent = String(items.length);
 
@@ -1177,10 +1105,10 @@ function renderNotesList() {
     row.className = 'note-item';
     const timestamp = new Date(note.updatedAtISO || note.createdAtISO || Date.now()).toLocaleString();
     row.innerHTML = `
-      <div class="note-item-head"><span>${note.pinned ? '📌 Pinned' : 'Note'}</span><span>${escapeHtml(timestamp)}</span></div>
+      <div class="note-item-head"><span>Note</span><span>${escapeHtml(timestamp)}</span></div>
       <div class="note-preview">${escapeHtml((note.text || '').split('\n')[0] || '(empty note)')}</div>
       <div class="note-actions">
-        <button class="btn secondary compact" data-action="jump">Jump</button>
+        <button class="btn secondary compact" data-action="pin">Pin</button>
         <button class="btn secondary compact" data-action="edit">Edit</button>
         <button class="btn secondary compact" data-action="delete">Delete</button>
       </div>
@@ -1190,7 +1118,7 @@ function renderNotesList() {
       const btn = e.target.closest('button');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'jump') return jumpToNote(note);
+      if (action === 'pin') return pinToNote(note);
       if (action === 'edit') return openNoteModal({ mode: 'edit', note });
       if (action === 'delete') return deleteNote(note.id);
     });
@@ -1199,18 +1127,16 @@ function renderNotesList() {
   }
 }
 
-function openNoteModal({ mode = 'create', note = null, suggestedAnchorType = 'selection' } = {}) {
+function openNoteModal({ mode = 'create', note = null } = {}) {
   const ctx = getActiveDocContext();
   if (!ctx) {
     alert('Open a document first.');
     return;
   }
 
-  noteEditorState = { mode, noteId: note?.id || null, suggestedAnchorType };
+  noteEditorState = { mode, noteId: note?.id || null, suggestedAnchorType: 'selection' };
   noteModalTitleEl.textContent = mode === 'edit' ? 'Edit Note' : 'New Note';
   noteTextEl.value = note?.text || '';
-  notePinnedEl.checked = !!note?.pinned;
-  noteAnchorTypeEl.value = note?.anchor?.type === 'heading' ? 'heading' : (note?.anchor?.type === 'scroll' ? 'scroll' : suggestedAnchorType || 'selection');
   noteModalBackdropEl.classList.add('open');
   noteTextEl.focus();
 }
@@ -1236,21 +1162,25 @@ function saveNoteFromModal() {
     return;
   }
 
-  const anchorType = noteAnchorTypeEl.value || 'selection';
-  const anchor = createAnchor(anchorType);
   const stamp = nowISO();
 
   if (noteEditorState.mode === 'edit' && noteEditorState.noteId) {
     const found = notesOverlay.notes.find((n) => n.id === noteEditorState.noteId);
     if (found) {
       found.text = text;
-      found.pinned = !!notePinnedEl.checked;
-      found.anchor = anchor;
+      const updatedAnchor = createAnchorFromSelection();
+      if (updatedAnchor) found.anchor = updatedAnchor;
       found.docKey = ctx.docKey;
       found.docTitle = ctx.docTitle;
       found.updatedAtISO = stamp;
     }
   } else {
+    const anchor = createAnchorFromSelection();
+    if (!anchor) {
+      alert('Highlight text in the preview first, then save your note.');
+      return;
+    }
+
     notesOverlay.notes.unshift({
       id: uuid(),
       docKey: ctx.docKey,
@@ -1258,7 +1188,6 @@ function saveNoteFromModal() {
       anchor,
       text,
       tags: [],
-      pinned: !!notePinnedEl.checked,
       createdAtISO: stamp,
       updatedAtISO: stamp
     });
@@ -1316,7 +1245,7 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
 }
 
 function jumpToNote(note) {
-  if (!note) return;
+  if (!note) return false;
   let target = null;
   const anchor = note.anchor || {};
 
@@ -1332,11 +1261,56 @@ function jumpToNote(note) {
   if (target) {
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     highlightAnchorElement(target);
-    return;
+    return true;
   }
 
   if (typeof anchor.scrollTop === 'number') {
     previewEl.scrollTo({ top: anchor.scrollTop, behavior: 'smooth' });
+    return true;
+  }
+
+  return false;
+}
+
+async function openDocumentForNote(note) {
+  const docKey = (note?.docKey || '').toString();
+  if (!docKey) return false;
+
+  if (docKey.startsWith('local:')) {
+    const id = docKey.slice('local:'.length);
+    const doc = state.docs.find((d) => d.id === id);
+    if (!doc) return false;
+    await loadDoc(id);
+    return true;
+  }
+
+  if (docKey.startsWith('site:')) {
+    const path = docKey.slice('site:'.length);
+    const doc = bundledDocs.find((d) => d.path === path);
+    if (!doc) return false;
+    await loadSiteDoc(doc);
+    return true;
+  }
+
+  return false;
+}
+
+async function pinToNote(note) {
+  if (!note) return;
+  const opened = await openDocumentForNote(note);
+  if (!opened) {
+    alert('Could not find the source document for this note.');
+    return;
+  }
+
+  if (previewContentType !== 'docx') {
+    alert('Pin highlight is available for DOCX previews only.');
+    return;
+  }
+
+  const jumped = jumpToNote(note);
+  if (!jumped) {
+    alert('Pinned location could not be found exactly, but the document is open.');
   }
 }
 
@@ -2257,7 +2231,6 @@ function importLibraryFromFile(file) {
           },
           text: (note.text || '').toString(),
           tags: Array.isArray(note.tags) ? note.tags : [],
-          pinned: !!note.pinned,
           createdAtISO: note.createdAtISO || nowISO(),
           updatedAtISO: note.updatedAtISO || nowISO()
         });
@@ -2381,10 +2354,11 @@ $("#importFile").addEventListener("change", (e) => {
 $("#btnCopyText").addEventListener("click", copyPlainText);
 
 btnAddNoteEl.addEventListener("click", () => {
-  const hasSelection = !!getCurrentSelectionInfo();
-  openNoteModal({ mode: 'create', suggestedAnchorType: hasSelection ? 'selection' : 'scroll' });
+  openNoteModal({ mode: 'create' });
 });
-btnNewNoteEl.addEventListener("click", () => openNoteModal({ mode: 'create', suggestedAnchorType: 'scroll' }));
+btnNewNoteEl.addEventListener("click", () => {
+  openNoteModal({ mode: 'create' });
+});
 notesShowAllEl.addEventListener("change", renderNotesList);
 notesHeadEl.addEventListener("click", () => {
   notesCategoryEl.classList.toggle("open");
