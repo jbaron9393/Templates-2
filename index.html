@@ -7,7 +7,6 @@
 
   <!-- Mammoth (DOCX -> HTML in browser) -->
   <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
-  <script src="https://unpkg.com/dompurify@3.1.6/dist/purify.min.js"></script>
 
   <style>
     /* --- Lightweight "cap_synoptic_generator.html"-ish layout: header + 2 panels --- */
@@ -202,13 +201,6 @@
 .preview h3 {
   margin: 14px 0 8px;
 }
-
-
-.preview strong { font-weight: 700; }
-.preview em { font-style: italic; }
-.preview u { text-decoration: underline; }
-.preview span { font-size: inherit; }
-
     
     /* Preserve DOCX list/indent readability despite global reset */
     .preview ul,
@@ -584,10 +576,21 @@ function escapeHtml(str) {
     .replaceAll("'","&#039;");
 }
 
-function sanitizeHtml(html) {
-  return DOMPurify.sanitize(html || "", {
-    USE_PROFILES: { html: true }
-  });
+function renderOutputRichText(html) {
+  const container = document.createElement("div");
+  container.innerHTML = html || "";
+
+  const submissionLinePattern = /^\s*\(\[[A-Za-z0-9\-]+\]\)\s+/;
+  for (const p of container.querySelectorAll("p")) {
+    if (!submissionLinePattern.test(p.textContent || "")) continue;
+
+    const line = document.createElement("div");
+    line.className = "subline";
+    while (p.firstChild) line.appendChild(p.firstChild);
+    p.replaceWith(line);
+  }
+
+  return container.innerHTML;
 }
 
 async function loadDoc(docId) {
@@ -615,7 +618,7 @@ async function loadDoc(docId) {
     );
 
     // Mammoth returns { value: "<p>...</p>", messages: [...] }
-    const sanitizedHtml = sanitizeHtml(result.value || "");
+    const html = renderOutputRichText(result.value || "");
     const messages = result.messages || [];
 
     const msgHtml = messages.length
@@ -627,7 +630,7 @@ async function loadDoc(docId) {
         </details>`
       : "";
 
-    previewEl.innerHTML = sanitizedHtml + msgHtml;
+    previewEl.innerHTML = html + msgHtml;
   } catch (e) {
     previewEl.innerHTML = `<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
   }
@@ -656,8 +659,7 @@ async function loadSiteDoc(doc) {
         ignoreEmptyParagraphs: false
       }
     );
-    const sanitizedHtml = sanitizeHtml(result.value || "");
-    previewEl.innerHTML = sanitizedHtml || "<div class=\"muted\">No content.</div>";
+    previewEl.innerHTML = renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>";
   } catch (e) {
     previewEl.innerHTML = `<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
   }
