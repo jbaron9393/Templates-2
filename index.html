@@ -531,6 +531,20 @@
         </div>
 
         <div class="row">
+          <div>
+            <label for="docType">Type</label>
+            <select id="docType">
+              <option value="template">Template</option>
+              <option value="how-to">How-To</option>
+              <option value="checklist">Checklist</option>
+              <option value="reference">Reference</option>
+              <option value="faq">FAQ</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
           <button class="btn" id="btnAdd">Add to Library</button>
           <div class="muted">
             Tip: Use categories like <b>GI</b>, <b>GYN</b>, <b>H&amp;N</b>, <b>Breast</b>, etc.
@@ -545,7 +559,7 @@
         <div class="row" style="margin-bottom:0;">
           <label>Site Documents (from <code>/docs/word-docs</code>)</label>
           <div class="muted">
-            Add <code>.docx</code> files to <code>/docs/word-docs</code>, then define each doc's
+            Add files to <code>/docs/word-docs</code>, then define each doc's
             <code>fileName</code>, <code>title</code>, and <code>category</code> in
             <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
           </div>
@@ -553,7 +567,7 @@
       </div>
 
       <div class="footer-note">
-        Render engine: Mammoth.js (DOCX → HTML). For perfect fidelity you’d need a server-side converter or PDF embedding.
+        Render engine: Mammoth.js (DOCX → HTML), plus in-browser PDF and image preview for bundled docs.
       </div>
     </div>
 
@@ -601,7 +615,7 @@
  * key: "docLibrary.v1"
  * library = {
  *   docs: [
- *     { id, title, category, fileName, addedAtISO, docxBase64 }
+ *     { id, title, category, docType, fileName, addedAtISO, docxBase64 }
  *   ]
  * }
  */
@@ -609,6 +623,16 @@
 const LS_KEY = "docLibrary.v1";
 const THEME_KEY = "docViewer.theme.v1";
 const LAYOUT_KEY = "docViewer.layout.v1";
+const DOC_TYPE_OPTIONS = ["template", "how-to", "checklist", "reference", "faq", "other"];
+const DOC_TYPE_PRIORITY = {
+  template: 0,
+  checklist: 1,
+  "how-to": 2,
+  reference: 3,
+  faq: 4,
+  other: 5
+};
+const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 
 const $ = (sel) => document.querySelector(sel);
 const navEl = $("#nav");
@@ -632,6 +656,7 @@ const btnClearSearchFloatEl = $("#btnClearSearchFloat");
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
 const docCategoryEl = $("#docCategory");
+const docTypeEl = $("#docType");
 
 let state = loadLibrary();
 let activeDocId = null;
@@ -654,7 +679,7 @@ function nowISO() { return new Date().toISOString(); }
 
 function titleFromFileName(fileName) {
   return (fileName || "Untitled")
-    .replace(/\.docx$/i, "")
+    .replace(/\.(docx|pdf|jpe?g|png)$/i, "")
     .replaceAll(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -669,13 +694,72 @@ function saveLibrary() {
   localStorage.setItem(LS_KEY, JSON.stringify(state));
 }
 
+function normalizeDocType(value) {
+  const normalized = (value || "").toString().trim().toLowerCase();
+  return DOC_TYPE_OPTIONS.includes(normalized) ? normalized : null;
+}
+
+function inferDocType({ title = "", fileName = "" } = {}) {
+  const haystack = `${title} ${fileName}`.toLowerCase();
+
+  if (/template|grossing|gross protocol|protocol/.test(haystack)) return "template";
+  if (/checklist/.test(haystack)) return "checklist";
+  if (/how\s*to|how-to|guide|troubleshooting|responsibilities|printing|saving|cancel/.test(haystack)) return "how-to";
+  if (/diagram|illustration|image|picture/.test(haystack)) return "reference";
+  if (/faq/.test(haystack)) return "faq";
+  return "other";
+}
+
+function getDocType(doc) {
+  return normalizeDocType(doc?.docType) || inferDocType(doc || {});
+}
+
+function compareDocsByTypeThenTitle(a, b) {
+  const typeDiff = (DOC_TYPE_PRIORITY[getDocType(a)] ?? DOC_TYPE_PRIORITY.other)
+    - (DOC_TYPE_PRIORITY[getDocType(b)] ?? DOC_TYPE_PRIORITY.other);
+  if (typeDiff !== 0) return typeDiff;
+
+  const titleA = (a?.title || a?.fileName || "").toString();
+  const titleB = (b?.title || b?.fileName || "").toString();
+  return titleA.localeCompare(titleB, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function stableSortDocs(docs) {
+  return (docs || [])
+    .map((doc, idx) => ({ doc, idx }))
+    .sort((a, b) => compareDocsByTypeThenTitle(a.doc, b.doc) || a.idx - b.idx)
+    .map((entry) => entry.doc);
+}
+
+function getFileExtension(fileName) {
+  const match = (fileName || "").toLowerCase().match(/\.[a-z0-9]+$/);
+  return match ? match[0] : "";
+}
+
+function isBundledExtensionAllowed(fileName) {
+  return BUNDLED_ALLOWED_EXTENSIONS.includes(getFileExtension(fileName));
+}
+
+function normalizeLibraryDoc(doc) {
+  const normalizedType = getDocType(doc);
+  return {
+    ...doc,
+    docType: normalizedType
+  };
+}
+
 function loadLibrary() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return { docs: [] };
     const parsed = JSON.parse(raw);
     if (!parsed.docs) return { docs: [] };
-    return parsed;
+    const docs = (Array.isArray(parsed.docs) ? parsed.docs : []).map(normalizeLibraryDoc);
+    const changed = docs.some((doc, idx) => doc.docType !== parsed.docs[idx]?.docType);
+    if (changed) {
+      localStorage.setItem(LS_KEY, JSON.stringify({ ...parsed, docs }));
+    }
+    return { ...parsed, docs };
   } catch {
     return { docs: [] };
   }
@@ -701,11 +785,11 @@ function groupByCategory(docs) {
     if (!map.has(cat)) map.set(cat, []);
     map.get(cat).push(d);
   }
-  // sort categories alpha; docs by title
+  // sort categories alpha; docs by docType priority then title
   const sortedCats = [...map.keys()].sort((a,b)=>a.localeCompare(b));
   const out = [];
   for (const cat of sortedCats) {
-    const items = map.get(cat).slice().sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+    const items = stableSortDocs(map.get(cat));
     out.push([cat, items]);
   }
   return out;
@@ -742,7 +826,7 @@ async function queueLeftSearchIndexDoc(doc) {
 
   try {
     let extracted = "";
-    if (doc?.path) {
+    if (doc?.path && getFileExtension(doc.fileName) === ".docx") {
       const response = await fetch(doc.path);
       if (response.ok) {
         const buffer = await response.arrayBuffer();
@@ -845,7 +929,7 @@ function groupDocsBySubgroup(items) {
     .sort(([a], [b]) => compareSubgroups(a, b))
     .map(([name, docs]) => ({
       name,
-      docs: docs.slice().sort((x, y) => (x.title || "").localeCompare(y.title || "", undefined, { numeric: true, sensitivity: "base" }))
+      docs: stableSortDocs(docs)
     }));
 }
 
@@ -1099,6 +1183,18 @@ function setPreviewHtml(html) {
   refreshSearchHighlights();
 }
 
+function renderBundledFileFallback(doc, reason = "") {
+  const message = reason
+    ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(reason)}</div>`
+    : "";
+
+  setPreviewHtml(`
+    ${message}
+    <div class="muted" style="margin-bottom:8px;">This bundled file could not be rendered in-browser.</div>
+    <a class="btn secondary compact" href="${doc.path}" target="_blank" rel="noopener">Open / download file</a>
+  `);
+}
+
 function clearSearchHighlights() {
   for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
     mark.replaceWith(document.createTextNode(mark.textContent || ""));
@@ -1292,11 +1388,28 @@ async function loadSiteDoc(doc) {
   selectionNoteEl.textContent = `Selected bundled doc: ${doc.title}`;
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
+  const ext = getFileExtension(doc.fileName);
+
+  if (ext === ".pdf") {
+    setPreviewHtml(`<iframe src="${doc.path}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(doc.title)}"></iframe>`);
+    return;
+  }
+
+  if ([".jpg", ".jpeg", ".png"].includes(ext)) {
+    setPreviewHtml(`<img src="${doc.path}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
+    return;
+  }
+
   try {
     const response = await fetch(doc.path);
     if (!response.ok) throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
 
     const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength) {
+      renderBundledFileFallback(doc, `"${doc.title}" appears to be empty.`);
+      return;
+    }
+
     const result = await mammoth.convertToHtml(
       { arrayBuffer: buffer },
       {
@@ -1305,11 +1418,12 @@ async function loadSiteDoc(doc) {
         ignoreEmptyParagraphs: false
       }
     );
-    setPreviewHtml(renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>");
+    setPreviewHtml(renderOutputRichText(result.value || "") || '<div class="muted">No content.</div>');
   } catch (e) {
-    setPreviewHtml(`<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
+    renderBundledFileFallback(doc, `Failed to render bundled DOCX: ${e?.message || String(e)}`);
   }
 }
+
 
 async function loadBundledDocs() {
   try {
@@ -1322,10 +1436,12 @@ async function loadBundledDocs() {
     const docs = entries
       .map((entry) => {
         if (typeof entry === "string") {
+          const fileName = entry;
           return {
-            fileName: entry,
-            title: titleFromFileName(entry),
-            category: "Uncategorized"
+            fileName,
+            title: titleFromFileName(fileName),
+            category: "Uncategorized",
+            docType: inferDocType({ fileName, title: titleFromFileName(fileName) })
           };
         }
 
@@ -1334,13 +1450,15 @@ async function loadBundledDocs() {
         const fileName = (entry.fileName || "").toString().trim();
         if (!fileName) return null;
 
+        const title = (entry.title || titleFromFileName(fileName)).toString().trim() || titleFromFileName(fileName);
         return {
           fileName,
-          title: (entry.title || titleFromFileName(fileName)).toString().trim() || titleFromFileName(fileName),
-          category: (entry.category || "Uncategorized").toString().trim() || "Uncategorized"
+          title,
+          category: (entry.category || "Uncategorized").toString().trim() || "Uncategorized",
+          docType: normalizeDocType(entry.docType) || inferDocType({ title, fileName })
         };
       })
-      .filter((doc) => doc && doc.fileName.toLowerCase().endsWith(".docx"))
+      .filter((doc) => doc && isBundledExtensionAllowed(doc.fileName))
       .map((doc) => ({
         ...doc,
         path: buildBundledDocPath(doc.fileName)
@@ -1370,6 +1488,7 @@ async function addDocFromUpload() {
 
   const title = (docTitleEl.value || "").trim() || file.name.replace(/\.docx$/i, "");
   const category = (docCategoryEl.value || "").trim() || "Uncategorized";
+  const docType = normalizeDocType(docTypeEl.value) || inferDocType({ title, fileName: file.name });
 
   if (!file.name.toLowerCase().endsWith(".docx")) {
     return setError("That file doesn't look like a .docx.");
@@ -1386,6 +1505,7 @@ async function addDocFromUpload() {
     category,
     fileName: file.name,
     addedAtISO: nowISO(),
+    docType,
     docxBase64: b64
   };
 
@@ -1397,6 +1517,7 @@ async function addDocFromUpload() {
   docFileEl.value = "";
   docTitleEl.value = "";
   docCategoryEl.value = category; // keep category for fast adds
+  docTypeEl.value = docType;
 
   renderNav();
   await loadDoc(doc.id);
@@ -1433,8 +1554,12 @@ function renameDoc(docId) {
   const newCat = prompt("New category:", d.category || "Uncategorized");
   if (newCat === null) return;
 
+  const newType = prompt("New type (template, how-to, checklist, reference, faq, other):", getDocType(d));
+  if (newType === null) return;
+
   d.title = (newTitle || "").trim() || d.title;
   d.category = (newCat || "").trim() || d.category || "Uncategorized";
+  d.docType = normalizeDocType(newType) || getDocType(d);
 
   saveLibrary();
   renderNav();
@@ -1457,14 +1582,19 @@ function importLibraryFromFile(file) {
 
       // Basic merge: if id collides, new one gets new uuid
       const existingIds = new Set(state.docs.map(d => d.id));
-      const incoming = parsed.docs.map(d => ({
-        id: existingIds.has(d.id) ? uuid() : d.id,
-        title: d.title || d.fileName || "Untitled",
-        category: d.category || "Uncategorized",
-        fileName: d.fileName || "imported.docx",
-        addedAtISO: d.addedAtISO || nowISO(),
-        docxBase64: d.docxBase64 || ""
-      })).filter(d => d.docxBase64);
+      const incoming = parsed.docs.map(d => {
+        const title = d.title || d.fileName || "Untitled";
+        const fileName = d.fileName || "imported.docx";
+        return {
+          id: existingIds.has(d.id) ? uuid() : d.id,
+          title,
+          category: d.category || "Uncategorized",
+          fileName,
+          addedAtISO: d.addedAtISO || nowISO(),
+          docType: normalizeDocType(d.docType) || inferDocType({ title, fileName }),
+          docxBase64: d.docxBase64 || ""
+        };
+      }).filter(d => d.docxBase64);
 
       state.docs = [...incoming, ...state.docs];
       if (leftSearchQuery) queueLeftSearchIndexAll();
