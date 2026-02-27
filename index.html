@@ -649,18 +649,6 @@
         </div>
 
         <div class="row">
-          <label>Notes</label>
-          <div class="notes-toolbar">
-            <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
-            <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
-              <input id="notesShowAll" type="checkbox" />
-              <span>All notes</span>
-            </label>
-          </div>
-          <div class="notes-list" id="notesList"></div>
-        </div>
-
-        <div class="row">
           <div class="nav" id="siteDocsNav"></div>
         </div>
 
@@ -721,7 +709,7 @@
 
         <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
 
-        <div class="category notes-category" id="notesCategory">
+        <div class="category notes-category open" id="notesCategory">
           <div class="cat-head" id="notesHead">
             <span class="cat-head-title">Notes</span>
             <span class="cat-count" id="notesCount">0</span>
@@ -2384,7 +2372,10 @@ btnAddNoteEl.addEventListener("click", () => {
   const hasSelection = !!getCurrentSelectionInfo();
   openNoteModal({ mode: 'create', suggestedAnchorType: hasSelection ? 'selection' : 'scroll' });
 });
-btnNewNoteEl.addEventListener("click", () => openNoteModal({ mode: 'create', suggestedAnchorType: 'scroll' }));
+btnNewNoteEl.addEventListener("click", () => {
+  const hasSelection = !!getCurrentSelectionInfo();
+  openNoteModal({ mode: 'create', suggestedAnchorType: hasSelection ? 'selection' : 'scroll' });
+});
 notesShowAllEl.addEventListener("change", renderNotesList);
 notesHeadEl.addEventListener("click", () => {
   notesCategoryEl.classList.toggle("open");
