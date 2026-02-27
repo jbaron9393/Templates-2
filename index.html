@@ -1220,6 +1220,33 @@ function renderOutputRichText(html) {
   }
   flushRun();
 
+  const templateLinePattern = /^[\-–•]\s+/;
+  const paragraphs = Array.from(container.querySelectorAll("p"));
+  const compactRuns = [];
+  let run = [];
+
+  const flushRun = () => {
+    if (run.length >= 3) compactRuns.push(...run);
+    run = [];
+  };
+
+  for (const p of paragraphs) {
+    const text = (p.textContent || "").trim();
+    if (templateLinePattern.test(text)) {
+      run.push(p);
+    } else {
+      flushRun();
+    }
+  }
+  flushRun();
+
+  for (const p of compactRuns) {
+    const line = document.createElement("div");
+    line.className = "subline";
+    while (p.firstChild) line.appendChild(p.firstChild);
+    p.replaceWith(line);
+  }
+
   return container.innerHTML;
 }
 
