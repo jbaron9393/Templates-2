@@ -224,8 +224,9 @@
         <div class="row">
           <label>Site Documents (from <code>/docs/word-docs</code>)</label>
           <div class="muted">
-            Add <code>.docx</code> files to <code>/docs/word-docs</code> and list their file names in
-            <code>/docs/word-docs/index.json</code>. They appear here automatically on page load.
+            Add <code>.docx</code> files to <code>/docs/word-docs</code>, then define each doc's
+            <code>fileName</code>, <code>title</code>, and <code>category</code> in
+            <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
           </div>
           <div class="nav" id="siteDocsNav"></div>
         </div>
@@ -490,32 +491,40 @@ function renderSiteDocsNav(siteDocs) {
     return;
   }
 
-  const list = document.createElement("div");
-  list.className = "category open";
-  list.innerHTML = `
-    <div class="cat-head">
-      <span>Bundled Documents</span>
-      <span class="cat-count">${siteDocs.length}</span>
-    </div>
-    <div class="doc-list" style="display:flex;"></div>
-  `;
+  const groups = groupByCategory(siteDocs);
 
-  const docsEl = list.querySelector(".doc-list");
+  for (const [cat, items] of groups) {
+    const catEl = document.createElement("div");
+    catEl.className = "category open";
 
-  for (const doc of siteDocs) {
-    const item = document.createElement("div");
-    item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
-    item.innerHTML = `
-      <div class="doc-meta">
-        <div class="doc-title">${escapeHtml(doc.title)}</div>
-        <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
-      </div>
+    const head = document.createElement("div");
+    head.className = "cat-head";
+    head.innerHTML = `
+      <span>${escapeHtml(cat)}</span>
+      <span class="cat-count">${items.length}</span>
     `;
-    item.addEventListener("click", () => loadSiteDoc(doc));
-    docsEl.appendChild(item);
-  }
+    head.addEventListener("click", () => catEl.classList.toggle("open"));
 
-  siteDocsNavEl.appendChild(list);
+    const list = document.createElement("div");
+    list.className = "doc-list";
+
+    for (const doc of items) {
+      const item = document.createElement("div");
+      item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+      item.innerHTML = `
+        <div class="doc-meta">
+          <div class="doc-title">${escapeHtml(doc.title)}</div>
+          <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+        </div>
+      `;
+      item.addEventListener("click", () => loadSiteDoc(doc));
+      list.appendChild(item);
+    }
+
+    catEl.appendChild(head);
+    catEl.appendChild(list);
+    siteDocsNavEl.appendChild(catEl);
+  }
 }
 
 function escapeHtml(str) {
@@ -597,14 +606,33 @@ async function loadBundledDocs() {
     if (!response.ok) throw new Error("index.json not found");
 
     const payload = await response.json();
-    const fileNames = Array.isArray(payload.files) ? payload.files : [];
+    const entries = Array.isArray(payload.files) ? payload.files : [];
 
-    const docs = fileNames
-      .filter(name => typeof name === "string" && name.toLowerCase().endsWith(".docx"))
-      .map((fileName) => ({
-        fileName,
-        title: titleFromFileName(fileName),
-        path: `./docs/word-docs/${encodeURIComponent(fileName)}`
+    const docs = entries
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return {
+            fileName: entry,
+            title: titleFromFileName(entry),
+            category: "Uncategorized"
+          };
+        }
+
+        if (!entry || typeof entry !== "object") return null;
+
+        const fileName = (entry.fileName || "").toString().trim();
+        if (!fileName) return null;
+
+        return {
+          fileName,
+          title: (entry.title || titleFromFileName(fileName)).toString().trim() || titleFromFileName(fileName),
+          category: (entry.category || "Uncategorized").toString().trim() || "Uncategorized"
+        };
+      })
+      .filter((doc) => doc && doc.fileName.toLowerCase().endsWith(".docx"))
+      .map((doc) => ({
+        ...doc,
+        path: `./docs/word-docs/${encodeURIComponent(doc.fileName)}`
       }));
 
     renderSiteDocsNav(docs);
