@@ -1,8 +1,28 @@
 {
+  "categories": [
+    "Biopsies (non-derm)",
+    "BM-Heme-Lymphoma",
+    "Breast",
+    "BST",
+    "Derm",
+    "Faxitron",
+    "Frozens",
+    "GI 1,2&3",
+    "GU",
+    "GYN-OB 1&2",
+    "Heart",
+    "HNE",
+    "Liver",
+    "Lung",
+    "Neuro and Eye",
+    "Pediatric Tumors"
+  ],
   "files": [
     {
       "fileName": "Mastectomy Grossing.docx",
-      "title": "Mastectomy",
+      "title": "Mastectomy Grossing",
       "category": "Breast"
-    }  ]
+    }
+
+  ]
 }
