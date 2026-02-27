@@ -121,6 +121,21 @@
       font-size: .82rem;
       border-width: 1px;
     }
+    .btn.ghost {
+      padding: 7px 9px;
+      font-size: .78rem;
+      border-width: 1px;
+      border-color: #e5e5e5;
+      background: #f2f2f2;
+      color: #444;
+      font-weight: 600;
+      opacity: .9;
+    }
+    .btn.ghost:hover {
+      background:#e9e9e9;
+      color:#222;
+      opacity:1;
+    }
 
     .muted { color: #666; font-size: .85rem; }
     .danger { color: #b00020; font-size: .85rem; }
@@ -312,6 +327,29 @@
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
 
+
+    .to-top-btn {
+      position: fixed;
+      right: 24px;
+      bottom: 22px;
+      z-index: 50;
+      border: 1px solid #CFB87C;
+      background: rgba(0,0,0,.9);
+      color: #CFB87C;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.2);
+    }
+    .to-top-btn.hidden {
+      display: none;
+    }
+    .to-top-btn:hover {
+      background: #CFB87C;
+      color: #000;
+    }
+
     body.dark {
       background: #101317;
       color: #e9edf2;
@@ -373,6 +411,20 @@
       color: #e9edf2;
       border-color: #3a4453;
     }
+    body.dark .btn.ghost {
+      background: #232b36;
+      color: #bfc8d6;
+      border-color: #303947;
+    }
+    body.dark .btn.ghost:hover {
+      background: #2f3948;
+      color: #e9edf2;
+    }
+    body.dark .to-top-btn {
+      background: rgba(23,29,38,.96);
+      border-color: #CFB87C;
+      color: #CFB87C;
+    }
     body.dark .btn.secondary:hover,
     body.dark .icon-btn:hover {
       background: #323d4d;
@@ -386,10 +438,10 @@
       <h1>Grossing Manual</h1>
       <small>Upload DOCX → assign category → click left nav to render on the right</small>
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <button class="btn secondary" id="btnExport">Export Library (JSON)</button>
+    <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+      <button class="btn ghost" id="btnExport">Export</button>
+      <button class="btn ghost" id="btnImport">Import</button>
       <button class="btn secondary" id="btnTheme">Dark Mode</button>
-      <button class="btn secondary" id="btnImport">Import Library (JSON)</button>
       <input type="file" id="importFile" accept="application/json" style="display:none;" />
     </div>
   </div>
@@ -399,7 +451,7 @@
     <div class="panel left">
       <div class="panel-header">
         <span>Library</span>
-        <span class="muted" id="libStatus">0 docs</span>
+        <span class="muted" id="libStatus">0 uploaded</span>
       </div>
 
       <div class="panel-body">
@@ -482,6 +534,8 @@
     </div>
   </div>
 
+  <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
+
 <script>
 /**
  * STARTER DATA MODEL (localStorage)
@@ -508,6 +562,7 @@ const previewMetaEl = $("#previewMeta");
 const selectionNoteEl = $("#selectionNote");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
+const btnToTopEl = $("#btnToTop");
 
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
@@ -666,7 +721,7 @@ async function copyToClipboard(text) {
 function renderNav() {
   navEl.innerHTML = "";
   const docs = state.docs || [];
-  libStatusEl.textContent = `${docs.length} doc${docs.length === 1 ? "" : "s"}`;
+  libStatusEl.textContent = `${docs.length} uploaded`;
 
   if (!docs.length) {
     navEl.innerHTML = `<div class="muted">No documents yet. Upload one above.</div>`;
@@ -1150,6 +1205,16 @@ async function copyPlainText() {
   alert("Copied plain text.");
 }
 
+function updateToTopVisibility() {
+  const shouldShow = window.scrollY > 200 || previewEl.scrollTop > 200;
+  btnToTopEl.classList.toggle("hidden", !shouldShow);
+}
+
+function scrollToTop() {
+  previewEl.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 // -------------------- Wire up events --------------------
 $("#btnAdd").addEventListener("click", addDocFromUpload);
 $("#btnTheme").addEventListener("click", toggleTheme);
@@ -1163,6 +1228,9 @@ $("#importFile").addEventListener("change", (e) => {
 });
 
 $("#btnCopyText").addEventListener("click", copyPlainText);
+btnToTopEl.addEventListener("click", scrollToTop);
+previewEl.addEventListener("scroll", updateToTopVisibility);
+window.addEventListener("scroll", updateToTopVisibility);
 $("#btnSearchNext").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchPrev").addEventListener("click", () => jumpToSearchMatch(false));
 $("#btnSearchClear").addEventListener("click", () => {
@@ -1181,6 +1249,7 @@ previewSearchEl.addEventListener("keydown", (e) => {
 renderNav();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
+updateToTopVisibility();
 </script>
 </body>
 </html>
