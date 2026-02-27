@@ -187,11 +187,19 @@
       border-radius: 10px;
       overflow: auto;
       min-height: 0;
-      line-height: 1;
+      line-height: 1.15; /* Word-like single spacing */
     }
-    .preview h1, .preview h2, .preview h3 { margin: 14px 0 8px; }
-    .preview p { margin: 4px 0; }
-
+    
+    .preview p {
+      margin: 2px 0; /* tighter paragraph spacing */
+    }
+    
+    .preview h1,
+    .preview h2,
+    .preview h3 {
+      margin: 10px 0 4px; /* tighter heading spacing */
+    }
+    
     /* Preserve DOCX list/indent readability despite global reset */
     .preview ul,
     .preview ol {
