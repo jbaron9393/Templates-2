@@ -38,7 +38,7 @@
 
     .main {
       display: flex;
-      gap: 16px;
+      gap: 10px;
       padding: 16px;
       max-width: 1700px;
       margin: 0 auto;
@@ -56,12 +56,27 @@
     }
 
     .left {
-      flex: 0 0 360px;
-      min-width: 320px;
+      flex: 0 0 var(--left-panel-width, 360px);
+      min-width: 280px;
     }
     .right {
-      flex: 1;
-      min-width: 520px;
+      flex: 1 1 0;
+      min-width: 420px;
+    }
+
+    .panel-resizer {
+      flex: 0 0 10px;
+      cursor: col-resize;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(207,184,124,.18), rgba(207,184,124,.35));
+      border: 1px solid rgba(207,184,124,.5);
+      align-self: stretch;
+      user-select: none;
+      touch-action: none;
+    }
+    .panel-resizer:hover,
+    .panel-resizer.dragging {
+      background: linear-gradient(180deg, rgba(207,184,124,.35), rgba(207,184,124,.6));
     }
 
     .panel-header {
@@ -213,8 +228,8 @@
     .subgroup {
       border: 1px solid #f0f0f0;
       border-radius: 8px;
-      padding: 8px;
       background: #fcfcfc;
+      overflow: hidden;
     }
     .subgroup + .subgroup {
       margin-top: 6px;
@@ -225,10 +240,31 @@
       letter-spacing: .03em;
       text-transform: uppercase;
       color: #555;
-      margin-bottom: 6px;
-      padding-bottom: 4px;
+      padding: 8px 10px;
       border-bottom: 1px solid #efefef;
       overflow-wrap: anywhere;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .subgroup-head::after {
+      content: "▸";
+      font-size: .72rem;
+      opacity: .85;
+      transition: transform .14s ease;
+    }
+    .subgroup.open .subgroup-head::after {
+      transform: rotate(90deg);
+    }
+    .subgroup-body {
+      display: none;
+      padding: 8px;
+    }
+    .subgroup.open .subgroup-body {
+      display: block;
     }
 
     .doc-actions { display:flex; gap:8px; }
@@ -253,9 +289,9 @@
 }
 
 .preview-inner {
-  max-width: 980px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 28px 40px;
+  padding: 24px 24px;
 }
 
 .preview-search {
@@ -349,6 +385,11 @@
       background: #CFB87C;
       color: #000;
     }
+    .clear-search-float {
+      bottom: 68px;
+      padding: 7px 11px;
+      font-size: .82rem;
+    }
 
     body.dark {
       background: #101317;
@@ -429,6 +470,10 @@
     body.dark .icon-btn:hover {
       background: #323d4d;
     }
+    body.dark .panel-resizer {
+      background: linear-gradient(180deg, rgba(207,184,124,.22), rgba(207,184,124,.4));
+      border-color: rgba(207,184,124,.6);
+    }
   </style>
 </head>
 
@@ -455,6 +500,12 @@
       </div>
 
       <div class="panel-body">
+        <div class="row">
+          <label for="leftSearch">Find specimen / doc in library</label>
+          <input id="leftSearch" type="text" placeholder="e.g., appendix, gallbladder" />
+          <div class="muted" id="leftSearchMeta"></div>
+        </div>
+
         <div class="row">
           <div class="nav" id="siteDocsNav"></div>
         </div>
@@ -506,6 +557,8 @@
       </div>
     </div>
 
+    <div class="panel-resizer" id="panelResizer" role="separator" aria-label="Resize panels" aria-orientation="vertical"></div>
+
     <!-- RIGHT: Preview -->
     <div class="panel right">
       <div class="panel-header">
@@ -539,6 +592,7 @@
     </div>
   </div>
 
+  <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
   <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
 
 <script>
@@ -554,12 +608,17 @@
 
 const LS_KEY = "docLibrary.v1";
 const THEME_KEY = "docViewer.theme.v1";
+const LAYOUT_KEY = "docViewer.layout.v1";
 
 const $ = (sel) => document.querySelector(sel);
 const navEl = $("#nav");
+const mainEl = $(".main");
+const panelResizerEl = $("#panelResizer");
 const siteDocsNavEl = $("#siteDocsNav");
 const errEl = $("#err");
 const libStatusEl = $("#libStatus");
+const leftSearchEl = $("#leftSearch");
+const leftSearchMetaEl = $("#leftSearchMeta");
 
 const previewEl = $("#preview");
 const previewTitleEl = $("#previewTitle");
@@ -568,6 +627,7 @@ const selectionNoteEl = $("#selectionNote");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
 const btnToTopEl = $("#btnToTop");
+const btnClearSearchFloatEl = $("#btnClearSearchFloat");
 
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
@@ -576,10 +636,14 @@ const docCategoryEl = $("#docCategory");
 let state = loadLibrary();
 let activeDocId = null;
 let activeSiteDocPath = null;
-let searchMatches = [];
+let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let bundledStats = { docs: 0, categories: 0 };
+let bundledDocs = [];
+let leftSearchQuery = "";
+let leftSearchDocTextCache = new Map();
+let leftSearchIndexing = new Set();
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -651,6 +715,89 @@ function setLibraryStatus() {
   libStatusEl.textContent = `${bundledStats.docs} docs / ${bundledStats.categories} categories`;
 }
 
+
+function normalizeSearchValue(value) {
+  return (value || "").toString().trim().toLowerCase();
+}
+
+function getLeftSearchDocKey(doc) {
+  if (doc?.path) return `site:${doc.path}`;
+  if (doc?.id) return `local:${doc.id}`;
+  return `local:${doc?.fileName || "unknown"}`;
+}
+
+async function extractRawSearchTextFromArrayBuffer(arrayBuffer) {
+  try {
+    const result = await mammoth.extractRawText({ arrayBuffer });
+    return normalizeSearchValue(result?.value || "");
+  } catch {
+    return "";
+  }
+}
+
+async function queueLeftSearchIndexDoc(doc) {
+  const key = getLeftSearchDocKey(doc);
+  if (leftSearchDocTextCache.has(key) || leftSearchIndexing.has(key)) return;
+  leftSearchIndexing.add(key);
+
+  try {
+    let extracted = "";
+    if (doc?.path) {
+      const response = await fetch(doc.path);
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        extracted = await extractRawSearchTextFromArrayBuffer(buffer);
+      }
+    } else if (doc?.docxBase64) {
+      const bytes = bytesFromBase64(doc.docxBase64);
+      extracted = await extractRawSearchTextFromArrayBuffer(bytes.buffer);
+    }
+
+    leftSearchDocTextCache.set(key, extracted);
+  } catch {
+    leftSearchDocTextCache.set(key, "");
+  } finally {
+    leftSearchIndexing.delete(key);
+    if (leftSearchQuery) {
+      renderNav();
+      renderSiteDocsNav(bundledDocs);
+      updateLeftSearchMeta();
+    }
+  }
+}
+
+function queueLeftSearchIndexAll() {
+  for (const doc of bundledDocs) queueLeftSearchIndexDoc(doc);
+  for (const doc of (state.docs || [])) queueLeftSearchIndexDoc(doc);
+}
+
+function matchesLeftSearch(doc) {
+  if (!leftSearchQuery) return true;
+
+  const metadata = [doc.title, doc.fileName, doc.category]
+    .map((value) => (value || "").toString().toLowerCase())
+    .join(" ");
+  if (metadata.includes(leftSearchQuery)) return true;
+
+  const key = getLeftSearchDocKey(doc);
+  const cached = leftSearchDocTextCache.get(key);
+  if (typeof cached === "string" && cached.includes(leftSearchQuery)) return true;
+  if (cached === undefined) queueLeftSearchIndexDoc(doc);
+
+  return false;
+}
+
+function updateLeftSearchMeta() {
+  if (!leftSearchQuery) {
+    leftSearchMetaEl.textContent = "";
+    return;
+  }
+
+  const bundledCount = bundledDocs.filter(matchesLeftSearch).length;
+  const uploadedCount = (state.docs || []).filter(matchesLeftSearch).length;
+  leftSearchMetaEl.textContent = `${bundledCount + uploadedCount} matches (${bundledCount} bundled, ${uploadedCount} uploaded)`;
+}
+
 function getSubgroupLabel(doc) {
   const parts = (doc.fileName || "")
     .split("/")
@@ -661,6 +808,31 @@ function getSubgroupLabel(doc) {
   return parts[1];
 }
 
+function subgroupSortValue(name) {
+  const value = (name || "").trim();
+  if (!value || value.toLowerCase() === "general") return { rank: 1, text: "general", num: Number.POSITIVE_INFINITY };
+
+  const match = value.match(/^(.*?)(\d+)$/);
+  if (match) {
+    return {
+      rank: 0,
+      text: match[1].trim().toLowerCase(),
+      num: Number(match[2])
+    };
+  }
+
+  return { rank: 0, text: value.toLowerCase(), num: Number.POSITIVE_INFINITY };
+}
+
+function compareSubgroups(a, b) {
+  const av = subgroupSortValue(a);
+  const bv = subgroupSortValue(b);
+  if (av.rank !== bv.rank) return av.rank - bv.rank;
+  if (av.text !== bv.text) return av.text.localeCompare(bv.text, undefined, { numeric: true, sensitivity: "base" });
+  if (av.num !== bv.num) return av.num - bv.num;
+  return (a || "").localeCompare(b || "", undefined, { numeric: true, sensitivity: "base" });
+}
+
 function groupDocsBySubgroup(items) {
   const groups = new Map();
   for (const doc of items) {
@@ -669,10 +841,12 @@ function groupDocsBySubgroup(items) {
     groups.get(subgroup).push(doc);
   }
 
-  return [...groups.entries()].map(([name, docs]) => ({
-    name,
-    docs
-  }));
+  return [...groups.entries()]
+    .sort(([a], [b]) => compareSubgroups(a, b))
+    .map(([name, docs]) => ({
+      name,
+      docs: docs.slice().sort((x, y) => (x.title || "").localeCompare(y.title || "", undefined, { numeric: true, sensitivity: "base" }))
+    }));
 }
 
 function toggleCategory(catEl, parentEl) {
@@ -731,10 +905,11 @@ async function copyToClipboard(text) {
 // -------------------- Rendering --------------------
 function renderNav() {
   navEl.innerHTML = "";
-  const docs = state.docs || [];
+  const docs = (state.docs || []).filter(matchesLeftSearch);
 
   if (!docs.length) {
     navEl.innerHTML = `<div class="muted">No documents yet. Upload one above.</div>`;
+    updateLeftSearchMeta();
     return;
   }
 
@@ -751,6 +926,7 @@ function renderNav() {
       <span class="cat-count">${items.length}</span>
     `;
     head.addEventListener("click", () => toggleCategory(catEl, navEl));
+    if (leftSearchQuery) catEl.classList.add("open");
 
     const list = document.createElement("div");
     list.className = "doc-list";
@@ -788,9 +964,12 @@ function renderNav() {
     catEl.appendChild(list);
     navEl.appendChild(catEl);
   }
+
+  updateLeftSearchMeta();
 }
 
 function renderSiteDocsNav(siteDocs) {
+  const visibleDocs = siteDocs.filter(matchesLeftSearch);
   siteDocsNavEl.innerHTML = "";
 
   if (!siteDocs.length) {
@@ -798,7 +977,12 @@ function renderSiteDocsNav(siteDocs) {
     return;
   }
 
-  const groups = groupByCategory(siteDocs);
+  if (!visibleDocs.length) {
+    siteDocsNavEl.innerHTML = `<div class="muted">No bundled docs match your search.</div>`;
+    return;
+  }
+
+  const groups = groupByCategory(visibleDocs);
 
   for (const [cat, items] of groups) {
     const catEl = document.createElement("div");
@@ -811,23 +995,15 @@ function renderSiteDocsNav(siteDocs) {
       <span class="cat-count">${items.length}</span>
     `;
     head.addEventListener("click", () => toggleCategory(catEl, siteDocsNavEl));
+    if (leftSearchQuery) catEl.classList.add("open");
 
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    const groupedItems = groupDocsBySubgroup(items);
-    for (const subgroup of groupedItems) {
-      const subgroupEl = document.createElement("div");
-      subgroupEl.className = "subgroup";
+    const useSubgroups = cat === "GYN-OB 1&2";
 
-      if (subgroup.name !== "General") {
-        const subgroupHead = document.createElement("div");
-        subgroupHead.className = "subgroup-head";
-        subgroupHead.textContent = subgroup.name;
-        subgroupEl.appendChild(subgroupHead);
-      }
-
-      for (const doc of subgroup.docs) {
+    if (!useSubgroups) {
+      for (const doc of items) {
         const item = document.createElement("div");
         item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
         item.innerHTML = `
@@ -837,10 +1013,45 @@ function renderSiteDocsNav(siteDocs) {
           </div>
         `;
         item.addEventListener("click", () => loadSiteDoc(doc));
-        subgroupEl.appendChild(item);
+        list.appendChild(item);
       }
+    } else {
+      const groupedItems = groupDocsBySubgroup(items);
+      for (const subgroup of groupedItems) {
+        const subgroupEl = document.createElement("div");
+        const hasActiveDoc = subgroup.docs.some((doc) => doc.path === activeSiteDocPath);
+        subgroupEl.className = "subgroup" + (hasActiveDoc ? " open" : "");
 
-      list.appendChild(subgroupEl);
+        const subgroupHead = document.createElement("div");
+        subgroupHead.className = "subgroup-head";
+        subgroupHead.innerHTML = `
+          <span>${escapeHtml(subgroup.name)}</span>
+          <span class="cat-count">${subgroup.docs.length}</span>
+        `;
+        subgroupHead.addEventListener("click", () => {
+          subgroupEl.classList.toggle("open");
+        });
+        subgroupEl.appendChild(subgroupHead);
+
+        const subgroupBody = document.createElement("div");
+        subgroupBody.className = "subgroup-body";
+
+        for (const doc of subgroup.docs) {
+          const item = document.createElement("div");
+          item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+          item.innerHTML = `
+            <div class="doc-meta">
+              <div class="doc-title">${escapeHtml(doc.title)}</div>
+              <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+            </div>
+          `;
+          item.addEventListener("click", () => loadSiteDoc(doc));
+          subgroupBody.appendChild(item);
+        }
+
+        subgroupEl.appendChild(subgroupBody);
+        list.appendChild(subgroupEl);
+      }
     }
 
     catEl.appendChild(head);
@@ -892,9 +1103,20 @@ function clearSearchHighlights() {
   for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
     mark.replaceWith(document.createTextNode(mark.textContent || ""));
   }
-  searchMatches = [];
+  searchMatchGroups = [];
   activeSearchIndex = -1;
   updateSearchMeta();
+}
+
+function updateFloatingSearchClear() {
+  const hasQuery = !!previewSearchEl.value.trim();
+  btnClearSearchFloatEl.classList.toggle("hidden", !hasQuery);
+}
+
+function clearPreviewSearch() {
+  previewSearchEl.value = "";
+  clearSearchHighlights();
+  updateFloatingSearchClear();
 }
 
 function updateSearchMeta() {
@@ -902,11 +1124,11 @@ function updateSearchMeta() {
     searchMetaEl.textContent = "";
     return;
   }
-  if (!searchMatches.length) {
+  if (!searchMatchGroups.length) {
     searchMetaEl.textContent = "0 matches";
     return;
   }
-  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatches.length}`;
+  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatchGroups.length}`;
 }
 
 function runPreviewSearch() {
@@ -914,21 +1136,23 @@ function runPreviewSearch() {
 }
 
 function jumpToSearchMatch(next = true) {
-  if (!searchMatches.length && previewSearchEl.value.trim()) {
+  if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
     refreshSearchHighlights(false);
   }
-  if (!searchMatches.length) return;
+  if (!searchMatchGroups.length) return;
 
-  searchMatches.forEach((el) => el.classList.remove("active"));
+  searchMatchGroups.forEach((group) => {
+    group.marks.forEach((mark) => mark.classList.remove("active"));
+  });
   if (next) {
-    activeSearchIndex = (activeSearchIndex + 1) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex + 1) % searchMatchGroups.length;
   } else {
-    activeSearchIndex = (activeSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex - 1 + searchMatchGroups.length) % searchMatchGroups.length;
   }
 
-  const target = searchMatches[activeSearchIndex];
-  target.classList.add("active");
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const group = searchMatchGroups[activeSearchIndex];
+  group.marks.forEach((mark) => mark.classList.add("active"));
+  group.marks[0].scrollIntoView({ behavior: "smooth", block: "center" });
   updateSearchMeta();
 }
 
@@ -953,35 +1177,59 @@ function refreshSearchHighlights(autoFocusFirst = true) {
   let node;
   while ((node = walker.nextNode())) textNodes.push(node);
 
+  const nodeRanges = [];
+  let fullText = "";
   for (const textNode of textNodes) {
-    const text = textNode.nodeValue;
-    regex.lastIndex = 0;
-    if (!regex.test(text)) continue;
+    const text = textNode.nodeValue || "";
+    const start = fullText.length;
+    fullText += text;
+    nodeRanges.push({ textNode, start, end: fullText.length });
+  }
 
-    const fragment = document.createDocumentFragment();
-    let lastIndex = 0;
-    regex.lastIndex = 0;
-    let match;
+  const matches = [];
+  regex.lastIndex = 0;
+  let match;
+  while ((match = regex.exec(fullText)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length });
+  }
 
-    while ((match = regex.exec(text)) !== null) {
-      const [matched] = match;
-      const start = match.index;
-      if (start > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+  let matchId = 0;
+  for (const currentMatch of matches) {
+    const group = { id: matchId++, marks: [] };
+    const touchedRanges = nodeRanges.filter((range) => range.end > currentMatch.start && range.start < currentMatch.end);
+
+    for (const range of touchedRanges) {
+      const nodeText = range.textNode.nodeValue || "";
+      const localStart = Math.max(0, currentMatch.start - range.start);
+      const localEnd = Math.min(nodeText.length, currentMatch.end - range.start);
+      if (localStart >= localEnd) continue;
+
+      const fragment = document.createDocumentFragment();
+      if (localStart > 0) fragment.appendChild(document.createTextNode(nodeText.slice(0, localStart)));
 
       const mark = document.createElement("mark");
       mark.className = "search-hit";
-      mark.textContent = matched;
+      mark.dataset.matchId = String(group.id);
+      mark.textContent = nodeText.slice(localStart, localEnd);
       fragment.appendChild(mark);
-      searchMatches.push(mark);
+      group.marks.push(mark);
 
-      lastIndex = start + matched.length;
+      if (localEnd < nodeText.length) fragment.appendChild(document.createTextNode(nodeText.slice(localEnd)));
+      range.textNode.replaceWith(fragment);
+
+      const tailNode = mark.nextSibling;
+      range.textNode = tailNode && tailNode.nodeType === Node.TEXT_NODE
+        ? tailNode
+        : document.createTextNode("");
+      if (!tailNode || tailNode.nodeType !== Node.TEXT_NODE) {
+        mark.after(range.textNode);
+      }
     }
 
-    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-    textNode.replaceWith(fragment);
+    if (group.marks.length) searchMatchGroups.push(group);
   }
 
-  if (searchMatches.length) {
+  if (searchMatchGroups.length) {
     activeSearchIndex = -1;
     if (autoFocusFirst) jumpToSearchMatch(true);
     else updateSearchMeta();
@@ -1098,13 +1346,18 @@ async function loadBundledDocs() {
         path: buildBundledDocPath(doc.fileName)
       }));
 
+    bundledDocs = docs;
+    if (leftSearchQuery) queueLeftSearchIndexAll();
     bundledStats = { docs: docs.length, categories: new Set(docs.map((d) => d.category || "Uncategorized")).size };
     setLibraryStatus();
     renderSiteDocsNav(docs);
+    updateLeftSearchMeta();
   } catch {
+    bundledDocs = [];
     bundledStats = { docs: 0, categories: 0 };
     setLibraryStatus();
     renderSiteDocsNav([]);
+    updateLeftSearchMeta();
   }
 }
 
@@ -1137,6 +1390,7 @@ async function addDocFromUpload() {
   };
 
   state.docs.unshift(doc);
+  if (leftSearchQuery) queueLeftSearchIndexDoc(doc);
   saveLibrary();
 
   // Reset inputs
@@ -1156,6 +1410,8 @@ function deleteDoc(docId) {
   if (!ok) return;
 
   state.docs = state.docs.filter(x => x.id !== docId);
+  leftSearchDocTextCache.delete(getLeftSearchDocKey(d));
+  leftSearchIndexing.delete(getLeftSearchDocKey(d));
   if (activeDocId === docId) {
     activeDocId = null;
     previewTitleEl.textContent = "Preview";
@@ -1211,6 +1467,7 @@ function importLibraryFromFile(file) {
       })).filter(d => d.docxBase64);
 
       state.docs = [...incoming, ...state.docs];
+      if (leftSearchQuery) queueLeftSearchIndexAll();
       saveLibrary();
       renderNav();
       alert(`Imported ${incoming.length} doc(s).`);
@@ -1249,6 +1506,66 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function applyLeftPanelWidth(widthPx) {
+  const minLeft = 280;
+  const minRight = 420;
+  const mainWidth = mainEl?.clientWidth || window.innerWidth;
+  const maxLeft = Math.max(minLeft, mainWidth - minRight - 30);
+  const clamped = Math.min(maxLeft, Math.max(minLeft, Math.round(widthPx)));
+  document.documentElement.style.setProperty("--left-panel-width", `${clamped}px`);
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftPanelWidth: clamped }));
+}
+
+function initPanelResizer() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+    if (typeof saved.leftPanelWidth === "number") applyLeftPanelWidth(saved.leftPanelWidth);
+  } catch {}
+
+  let dragging = false;
+
+  const onMove = (clientX) => {
+    if (!dragging) return;
+    const rect = mainEl.getBoundingClientRect();
+    const leftWidth = clientX - rect.left - 5;
+    applyLeftPanelWidth(leftWidth);
+  };
+
+  const stopDragging = () => {
+    if (!dragging) return;
+    dragging = false;
+    panelResizerEl.classList.remove("dragging");
+  };
+
+  panelResizerEl.addEventListener("mousedown", (e) => {
+    dragging = true;
+    panelResizerEl.classList.add("dragging");
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => onMove(e.clientX));
+  window.addEventListener("mouseup", stopDragging);
+
+  panelResizerEl.addEventListener("touchstart", (e) => {
+    dragging = true;
+    panelResizerEl.classList.add("dragging");
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener("touchmove", (e) => {
+    if (!dragging || !e.touches?.[0]) return;
+    onMove(e.touches[0].clientX);
+  }, { passive: true });
+
+  window.addEventListener("touchend", stopDragging);
+  window.addEventListener("touchcancel", stopDragging);
+
+  window.addEventListener("resize", () => {
+    const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--left-panel-width"), 10);
+    if (!Number.isNaN(current)) applyLeftPanelWidth(current);
+  });
+}
+
 // -------------------- Wire up events --------------------
 $("#btnAdd").addEventListener("click", addDocFromUpload);
 $("#btnTheme").addEventListener("click", toggleTheme);
@@ -1262,22 +1579,34 @@ $("#importFile").addEventListener("change", (e) => {
 });
 
 $("#btnCopyText").addEventListener("click", copyPlainText);
+leftSearchEl.addEventListener("input", () => {
+  leftSearchQuery = normalizeSearchValue(leftSearchEl.value);
+  if (leftSearchQuery) queueLeftSearchIndexAll();
+  renderNav();
+  renderSiteDocsNav(bundledDocs);
+  updateLeftSearchMeta();
+});
 btnToTopEl.addEventListener("click", scrollToTop);
 previewEl.addEventListener("scroll", updateToTopVisibility);
 window.addEventListener("scroll", updateToTopVisibility);
 $("#btnSearchFind").addEventListener("click", runPreviewSearch);
 $("#btnSearchNext").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchPrev").addEventListener("click", () => jumpToSearchMatch(false));
-$("#btnSearchClear").addEventListener("click", () => {
-  previewSearchEl.value = "";
-  clearSearchHighlights();
+$("#btnSearchClear").addEventListener("click", clearPreviewSearch);
+btnClearSearchFloatEl.addEventListener("click", clearPreviewSearch);
+previewSearchEl.addEventListener("input", () => {
+  refreshSearchHighlights(false);
+  updateFloatingSearchClear();
 });
-previewSearchEl.addEventListener("input", refreshSearchHighlights);
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     if (e.shiftKey) jumpToSearchMatch(false);
-    else runPreviewSearch();
+    else jumpToSearchMatch(true);
+  }
+  if (e.key === "Escape" && previewSearchEl.value.trim()) {
+    e.preventDefault();
+    clearPreviewSearch();
   }
 });
 
@@ -1287,6 +1616,9 @@ setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
 updateToTopVisibility();
+updateFloatingSearchClear();
+updateLeftSearchMeta();
+initPanelResizer();
 </script>
 </body>
 </html>
