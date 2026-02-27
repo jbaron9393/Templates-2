@@ -18,6 +18,9 @@
       color: #222;
       line-height: 1.5;
       transition: background .2s ease, color .2s ease;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
@@ -43,6 +46,7 @@
       max-width: 1700px;
       margin: 0 auto;
       min-height: calc(100vh - 88px);
+      width: 100%;
     }
 
     .panel {
@@ -368,6 +372,16 @@
     .preview img { max-width: 100%; height: auto; }
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
+    .site-footer {
+      margin-top: auto;
+      width: 100%;
+      max-width: 1700px;
+      margin-left: auto;
+      margin-right: auto;
+      padding: 6px 20px 16px;
+      color: #777;
+      font-size: .8rem;
+    }
 
 
     .to-top-btn {
@@ -450,6 +464,7 @@
     body.dark .cat-count,
     body.dark label,
     body.dark .footer-note,
+    body.dark .site-footer,
     body.dark .header small {
       color: #b5becc;
     }
@@ -604,11 +619,12 @@
         </div>
       </div>
 
-      <div class="footer-note" id="selectionNote">
-        Grossing Manual — University of Colorado Department of Pathology<br />
-        Last updated February 2026
-      </div>
     </div>
+  </div>
+
+  <div class="site-footer" id="selectionNote">
+    Grossing Manual — University of Colorado Department of Pathology<br />
+    Last updated February 2026
   </div>
 
   <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
@@ -1177,6 +1193,21 @@ function renderOutputRichText(html) {
     line.className = "subline";
     while (p.firstChild) line.appendChild(p.firstChild);
     p.replaceWith(line);
+  }
+
+  const hasUterusTemplateHeading = Array.from(container.querySelectorAll("p, h1, h2, h3, h4"))
+    .some((el) => /UTERUS\s+DICTATION\s+TEMPLATE/i.test(el.textContent || ""));
+
+  if (hasUterusTemplateHeading) {
+    for (const p of container.querySelectorAll("p")) {
+      const text = (p.textContent || "").trim();
+      if (!text.startsWith("- ")) continue;
+
+      const line = document.createElement("div");
+      line.className = "subline";
+      while (p.firstChild) line.appendChild(p.firstChild);
+      p.replaceWith(line);
+    }
   }
 
   return container.innerHTML;
