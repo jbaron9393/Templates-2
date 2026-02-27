@@ -370,6 +370,11 @@
       background: #CFB87C;
       color: #000;
     }
+    .clear-search-float {
+      bottom: 68px;
+      padding: 7px 11px;
+      font-size: .82rem;
+    }
 
     body.dark {
       background: #101317;
@@ -560,6 +565,7 @@
     </div>
   </div>
 
+  <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
   <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
 
 <script>
@@ -589,6 +595,7 @@ const selectionNoteEl = $("#selectionNote");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
 const btnToTopEl = $("#btnToTop");
+const btnClearSearchFloatEl = $("#btnClearSearchFloat");
 
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
@@ -970,6 +977,18 @@ function clearSearchHighlights() {
   activeSearchIndex = -1;
   updateSearchMeta();
 }
+
+function updateFloatingSearchClear() {
+  const hasQuery = !!previewSearchEl.value.trim();
+  btnClearSearchFloatEl.classList.toggle("hidden", !hasQuery);
+}
+
+function clearPreviewSearch() {
+  previewSearchEl.value = "";
+  clearSearchHighlights();
+  updateFloatingSearchClear();
+}
+
 
 function updateSearchMeta() {
   if (!previewSearchEl.value.trim()) {
@@ -1368,16 +1387,21 @@ window.addEventListener("scroll", updateToTopVisibility);
 $("#btnSearchFind").addEventListener("click", runPreviewSearch);
 $("#btnSearchNext").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchPrev").addEventListener("click", () => jumpToSearchMatch(false));
-$("#btnSearchClear").addEventListener("click", () => {
-  previewSearchEl.value = "";
-  clearSearchHighlights();
+$("#btnSearchClear").addEventListener("click", clearPreviewSearch);
+btnClearSearchFloatEl.addEventListener("click", clearPreviewSearch);
+previewSearchEl.addEventListener("input", () => {
+  refreshSearchHighlights(false);
+  updateFloatingSearchClear();
 });
-previewSearchEl.addEventListener("input", () => refreshSearchHighlights(false));
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     if (e.shiftKey) jumpToSearchMatch(false);
     else jumpToSearchMatch(true);
+  }
+  if (e.key === "Escape" && previewSearchEl.value.trim()) {
+    e.preventDefault();
+    clearPreviewSearch();
   }
 });
 
@@ -1387,6 +1411,7 @@ setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
 updateToTopVisibility();
+updateFloatingSearchClear();
 </script>
 </body>
 </html>
