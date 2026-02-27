@@ -1183,6 +1183,18 @@ function setPreviewHtml(html) {
   refreshSearchHighlights();
 }
 
+function renderBundledFileFallback(doc, reason = "") {
+  const message = reason
+    ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(reason)}</div>`
+    : "";
+
+  setPreviewHtml(`
+    ${message}
+    <div class="muted" style="margin-bottom:8px;">This bundled file could not be rendered in-browser.</div>
+    <a class="btn secondary compact" href="${doc.path}" target="_blank" rel="noopener">Open / download file</a>
+  `);
+}
+
 function clearSearchHighlights() {
   for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
     mark.replaceWith(document.createTextNode(mark.textContent || ""));
@@ -1379,12 +1391,12 @@ async function loadSiteDoc(doc) {
   const ext = getFileExtension(doc.fileName);
 
   if (ext === ".pdf") {
-    setPreviewHtml(`<iframe src="${encodeURI(doc.path)}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(doc.title)}"></iframe>`);
+    setPreviewHtml(`<iframe src="${doc.path}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(doc.title)}"></iframe>`);
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
-    setPreviewHtml(`<img src="${encodeURI(doc.path)}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
+    setPreviewHtml(`<img src="${doc.path}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
     return;
   }
 
@@ -1393,6 +1405,11 @@ async function loadSiteDoc(doc) {
     if (!response.ok) throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
 
     const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength) {
+      renderBundledFileFallback(doc, `"${doc.title}" appears to be empty.`);
+      return;
+    }
+
     const result = await mammoth.convertToHtml(
       { arrayBuffer: buffer },
       {
@@ -1403,7 +1420,7 @@ async function loadSiteDoc(doc) {
     );
     setPreviewHtml(renderOutputRichText(result.value || "") || '<div class="muted">No content.</div>');
   } catch (e) {
-    setPreviewHtml(`<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
+    renderBundledFileFallback(doc, `Failed to render bundled DOCX: ${e?.message || String(e)}`);
   }
 }
 
