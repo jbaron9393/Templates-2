@@ -486,6 +486,7 @@
       padding: 6px 20px 16px;
       color: #777;
       font-size: .8rem;
+      text-align: center;
     }
 
 
@@ -731,11 +732,11 @@
         <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
 
         <div class="row" style="margin-bottom:0;">
-          <label>Site Documents (from <code>/docs/word-docs</code>)</label>
+          <label>Site Documents</label>
           <div class="muted">
-            Add files to <code>/docs/word-docs</code>, then define each doc's
-            <code>fileName</code>, <code>title</code>, and <code>category</code> in
-            <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
+            Use the uploader above to add Word documents, PDFs, or images.<br />
+            Enter a Title, select a Category, choose a Type, then click Add to Library.<br /><br />
+            Your document will appear in the left panel and remain saved locally in your browser.
           </div>
         </div>
 
@@ -752,7 +753,7 @@
                 <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
                 <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
                   <input id="notesShowAll" type="checkbox" />
-                  <span>All notes</span>
+                  <span>Show Notes</span>
                 </label>
               </div>
               <div class="notes-list" id="notesList"></div>
@@ -1186,14 +1187,15 @@ function filteredNotesForView() {
 
 function renderNotesList() {
   if (!notesListEl) return;
+  const totalNotes = Array.isArray(notesOverlay.notes) ? notesOverlay.notes.length : 0;
   const items = filteredNotesForView()
     .slice()
     .sort((a, b) => (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
 
-  if (notesCountEl) notesCountEl.textContent = String(items.length);
+  if (notesCountEl) notesCountEl.textContent = String(totalNotes);
 
   if (!items.length) {
-    notesListEl.innerHTML = '<div class="muted">No notes yet for this view.</div>';
+    notesListEl.innerHTML = '<div class="muted">Select "Show Notes" to see your stored notes.</div>';
     return;
   }
 
@@ -1805,7 +1807,7 @@ function appendBundledSection(listEl, docs, showHeader) {
   if (showHeader) {
     const header = document.createElement("div");
     header.className = "source-head";
-    header.textContent = "Bundled";
+    header.textContent = "Internal";
     listEl.appendChild(header);
   }
 
