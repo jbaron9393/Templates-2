@@ -18,6 +18,8 @@
     "Pediatric Tumors"
   ],
   "files": [
+
+    /* ---------------- BREAST ---------------- */
     {
       "fileName": "Breast/Mastectomy Grossing.docx",
       "title": "Mastectomy Grossing",
@@ -43,110 +45,163 @@
       "title": "Sentinel Lymph Node – Breast",
       "category": "Breast"
     },
+
+    /* ---------------- GI ---------------- */
     {
-      "fileName": "Biopsies (non-derm)/GI Biopsy Headers and Formatting.docx",
-      "title": "GI Biopsy Headers and Formatting",
-      "category": "Biopsies (non-derm)"
+      "fileName": "GI 1,2&3/GI 1&2 Grossing TEMPLATES.docx",
+      "title": "GI 1&2 Grossing Templates",
+      "category": "GI 1,2&3"
     },
     {
-      "fileName": "BM-Heme-Lymphoma/Bone marrow Accessioning and Grossing.docx",
-      "title": "Bone Marrow Accessioning and Grossing",
-      "category": "BM-Heme-Lymphoma"
+      "fileName": "GI 1,2&3/whipple and distal panc.docx",
+      "title": "Whipple and Distal Pancreatectomy",
+      "category": "GI 1,2&3"
     },
     {
-      "fileName": "BM-Heme-Lymphoma/CU Lymphoma Protocol_02-06-2023.pdf",
-      "title": "CU Lymphoma Protocol (02-06-2023)",
-      "category": "BM-Heme-Lymphoma"
+      "fileName": "GI 1,2&3/Whipple grossing checklist.docx",
+      "title": "Whipple Grossing Checklist",
+      "category": "GI 1,2&3"
+    },
+
+    /* ---------------- GU ---------------- */
+    {
+      "fileName": "GU/GU Specimens COMPLETE.docx",
+      "title": "GU Specimens Complete",
+      "category": "GU"
+    },
+
+    /* ---------------- GYN-OB ---------------- */
+    {
+      "fileName": "GYN-OB 1&2/GYN 1/Hysterectomy ~BENIGN~ for prolapse, leiomyoma and non malignancy Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Benign",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/BST grossing info.docx",
-      "title": "BST Grossing Information",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 1/Hysterectomy ~CANCER~ for endometrial hyperplasia cancer Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Endometrial Hyperplasia / Cancer",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/BST Photograph policy.docx",
-      "title": "BST Photograph Policy",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 1/Hysterectomy for ~CERVICAL CANCER~ Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Cervical Cancer",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/BST Specimen List.docx",
-      "title": "BST Specimen List",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 1/Lymphatic Drainage of Uterus Illustration.jpg",
+      "title": "Lymphatic Drainage of Uterus (Illustration)",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/BST.james version v2 fracture.pdf",
-      "title": "BST James Version v2 (Fracture)",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 1/Ovary and fallopian tube Gross Protocol and Templates 040324.docx",
+      "title": "Ovary and Fallopian Tube Gross Protocol and Templates",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/BST.james version.pdf",
-      "title": "BST James Version",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 2/Cervix LEEP or cone Gross Protocol and Template 041624.docx",
+      "title": "Cervix LEEP or Cone – Gross Protocol and Template",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "BST/Updated BST rotation outline (v2).docx",
-      "title": "Updated BST Rotation Outline (v2)",
-      "category": "BST"
+      "fileName": "GYN-OB 1&2/GYN 2/Furcate Cord Insertion.jpg",
+      "title": "Furcate Cord Insertion (Illustration)",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Derm/Mohs.docx",
-      "title": "Mohs",
-      "category": "Derm"
+      "fileName": "GYN-OB 1&2/GYN 2/Hysterectomy gravid with Placenta in Situ Gross Protocol and Template 061621.docx",
+      "title": "Gravid Hysterectomy with Placenta In Situ",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Derm/Oriented Ellipse.docx",
-      "title": "Oriented Ellipse",
-      "category": "Derm"
+      "fileName": "GYN-OB 1&2/GYN 2/Pelvic Exenteration Gross Protocol 101121.docx",
+      "title": "Pelvic Exenteration Gross Protocol",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Derm/Shave-Punch Biopsy.docx",
-      "title": "Shave-Punch Biopsy",
-      "category": "Derm"
+      "fileName": "GYN-OB 1&2/GYN 2/Placenta ~SINGLETON~ Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Singleton",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Derm/Unoriented Ellipse.docx",
-      "title": "Unoriented Ellipse",
-      "category": "Derm"
+      "fileName": "GYN-OB 1&2/GYN 2/Placenta twin 2 discs Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Twin (Two Discs)",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Faxitron/How-to guide.docx",
-      "title": "How-To Guide",
-      "category": "Faxitron"
+      "fileName": "GYN-OB 1&2/GYN 2/Placenta twin fused discs template Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Twin (Fused Discs)",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Faxitron/Saving Faxitron Images.docx",
-      "title": "Saving Faxitron Images",
-      "category": "Faxitron"
+      "fileName": "GYN-OB 1&2/GYN 2/Products of Conception FAQs 041624.docx",
+      "title": "Products of Conception FAQs",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Frozens/Cancelling a FS block.docx",
-      "title": "Cancelling a Frozen Section Block",
-      "category": "Frozens"
+      "fileName": "GYN-OB 1&2/GYN 2/Products of Conception Gross Protocol and Template 041624.docx",
+      "title": "Products of Conception Gross Protocol and Template",
+      "category": "GYN-OB 1&2"
     },
     {
-      "fileName": "Frozens/Cryostat troubleshooting.docx",
-      "title": "Cryostat Troubleshooting",
-      "category": "Frozens"
+      "fileName": "GYN-OB 1&2/GYN 2/Vulvectomy Gross Protocol and Template 041724.docx",
+      "title": "Vulvectomy Gross Protocol and Template",
+      "category": "GYN-OB 1&2"
+    },
+
+    /* ---------------- HEART ---------------- */
+    {
+      "fileName": "Heart/Gross Heart Explants 02.06.23.docx",
+      "title": "Gross Heart Explants (02.06.23)",
+      "category": "Heart"
+    },
+
+    /* ---------------- HNE ---------------- */
+    {
+      "fileName": "HNE/HNE Grossing Guide TEMPLATES.docx",
+      "title": "HNE Grossing Guide Templates",
+      "category": "HNE"
+    },
+
+    /* ---------------- LIVER ---------------- */
+    {
+      "fileName": "Liver/Liver segments picture.jpg",
+      "title": "Liver Segments (Illustration)",
+      "category": "Liver"
     },
     {
-      "fileName": "Frozens/How to add blocks- CoPath.docx",
-      "title": "How to Add Blocks – CoPath",
-      "category": "Frozens"
+      "fileName": "Liver/liver templates.docx",
+      "title": "Liver Grossing Templates",
+      "category": "Liver"
+    },
+
+    /* ---------------- LUNG ---------------- */
+    {
+      "fileName": "Lung/Lung Grossing and Templates.docx",
+      "title": "Lung Grossing and Templates",
+      "category": "Lung"
+    },
+
+    /* ---------------- NEURO AND EYE ---------------- */
+    {
+      "fileName": "Neuro and Eye/Eye Diagram - 1.pdf",
+      "title": "Eye Diagram 1",
+      "category": "Neuro and Eye"
     },
     {
-      "fileName": "Frozens/Printing Frozen Slide Labels.docx",
-      "title": "Printing Frozen Slide Labels",
-      "category": "Frozens"
+      "fileName": "Neuro and Eye/Eye Diagram - 2.pdf",
+      "title": "Eye Diagram 2",
+      "category": "Neuro and Eye"
     },
     {
-      "fileName": "Frozens/Responsibilities.docx",
-      "title": "Frozen Section Responsibilities",
-      "category": "Frozens"
+      "fileName": "Neuro and Eye/Neuro Templates.docx",
+      "title": "Neuro Templates",
+      "category": "Neuro and Eye"
     },
+
+    /* ---------------- PEDIATRIC TUMORS ---------------- */
     {
-      "fileName": "Frozens/Stainline.docx",
-      "title": "Stainline",
-      "category": "Frozens"
+      "fileName": "Pediatric Tumors/FAQ.docx",
+      "title": "Pediatric Tumors FAQ",
+      "category": "Pediatric Tumors"
     }
   ]
 }
