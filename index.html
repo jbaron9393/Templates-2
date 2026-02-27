@@ -74,6 +74,9 @@
       justify-content: space-between;
       gap: 10px;
     }
+    .panel-header > span:first-child {
+      overflow-wrap: anywhere;
+    }
     .panel-body { padding: 14px 16px; overflow: auto; min-height: 0; }
 
     .row { display: grid; gap: 10px; margin-bottom: 12px; }
@@ -118,6 +121,21 @@
       font-size: .82rem;
       border-width: 1px;
     }
+    .btn.ghost {
+      padding: 7px 9px;
+      font-size: .78rem;
+      border-width: 1px;
+      border-color: #e5e5e5;
+      background: #f2f2f2;
+      color: #444;
+      font-weight: 600;
+      opacity: .9;
+    }
+    .btn.ghost:hover {
+      background:#e9e9e9;
+      color:#222;
+      opacity:1;
+    }
 
     .muted { color: #666; font-size: .85rem; }
     .danger { color: #b00020; font-size: .85rem; }
@@ -144,6 +162,11 @@
       gap: 10px;
       cursor: pointer;
       user-select: none;
+    }
+    .cat-head-title {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .category > .cat-head:hover { background:#f2f2f2; }
     .cat-count { color:#777; font-weight: 700; font-size: .85rem; }
@@ -172,8 +195,41 @@
     .doc-item.active { background:#fff8e7; border-color:#CFB87C; }
 
     .doc-meta { display:flex; flex-direction: column; min-width: 0; }
-    .doc-title { font-weight: 800; font-size: .95rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .doc-sub { font-size:.8rem; color:#666; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .doc-title {
+      font-weight: 800;
+      font-size: .95rem;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+    .doc-sub {
+      font-size:.8rem;
+      color:#666;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      line-height: 1.25;
+    }
+
+    .subgroup {
+      border: 1px solid #f0f0f0;
+      border-radius: 8px;
+      padding: 8px;
+      background: #fcfcfc;
+    }
+    .subgroup + .subgroup {
+      margin-top: 6px;
+    }
+    .subgroup-head {
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+      color: #555;
+      margin-bottom: 6px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #efefef;
+      overflow-wrap: anywhere;
+    }
 
     .doc-actions { display:flex; gap:8px; }
     .icon-btn {
@@ -187,13 +243,41 @@
     .icon-btn:hover { background:#f3f3f3; }
 
 .preview {
-  padding: 16px;
+  padding: 0;
   background: #fafafa;
   border: 1px solid #eee;
   border-radius: 10px;
   overflow: auto;
   min-height: 0;
   line-height: 1.2;
+}
+
+.preview-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 28px 40px;
+}
+
+.preview-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.preview-search input {
+  min-width: 220px;
+  flex: 1;
+}
+
+.search-hit {
+  background: #fff09b;
+  color: #222;
+  padding: 0 1px;
+}
+
+.search-hit.active {
+  background: #ffcd38;
 }
 
 .preview p {
@@ -243,6 +327,29 @@
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
 
+
+    .to-top-btn {
+      position: fixed;
+      right: 24px;
+      bottom: 22px;
+      z-index: 50;
+      border: 1px solid #CFB87C;
+      background: rgba(0,0,0,.9);
+      color: #CFB87C;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,0,0,.2);
+    }
+    .to-top-btn.hidden {
+      display: none;
+    }
+    .to-top-btn:hover {
+      background: #CFB87C;
+      color: #000;
+    }
+
     body.dark {
       background: #101317;
       color: #e9edf2;
@@ -269,6 +376,22 @@
     body.dark .preview {
       background: #171d26;
     }
+    body.dark .search-hit {
+      background: #6c5d14;
+      color: #fff;
+    }
+    body.dark .search-hit.active {
+      background: #c79c12;
+      color: #111;
+    }
+    body.dark .subgroup {
+      background: #1e2531;
+      border-color: #303947;
+    }
+    body.dark .subgroup-head {
+      color: #b5becc;
+      border-bottom-color: #303947;
+    }
     body.dark .category > .cat-head:hover,
     body.dark .doc-item:hover,
     body.dark .doc-item.active {
@@ -288,6 +411,20 @@
       color: #e9edf2;
       border-color: #3a4453;
     }
+    body.dark .btn.ghost {
+      background: #232b36;
+      color: #bfc8d6;
+      border-color: #303947;
+    }
+    body.dark .btn.ghost:hover {
+      background: #2f3948;
+      color: #e9edf2;
+    }
+    body.dark .to-top-btn {
+      background: rgba(23,29,38,.96);
+      border-color: #CFB87C;
+      color: #CFB87C;
+    }
     body.dark .btn.secondary:hover,
     body.dark .icon-btn:hover {
       background: #323d4d;
@@ -301,10 +438,10 @@
       <h1>Grossing Manual</h1>
       <small>Upload DOCX → assign category → click left nav to render on the right</small>
     </div>
-    <div style="display:flex; gap:10px; align-items:center;">
-      <button class="btn secondary" id="btnExport">Export Library (JSON)</button>
+    <div style="display:flex; gap:8px; align-items:center; margin-left:auto;">
+      <button class="btn ghost" id="btnExport">Export</button>
+      <button class="btn ghost" id="btnImport">Import</button>
       <button class="btn secondary" id="btnTheme">Dark Mode</button>
-      <button class="btn secondary" id="btnImport">Import Library (JSON)</button>
       <input type="file" id="importFile" accept="application/json" style="display:none;" />
     </div>
   </div>
@@ -314,7 +451,7 @@
     <div class="panel left">
       <div class="panel-header">
         <span>Library</span>
-        <span class="muted" id="libStatus">0 docs</span>
+        <span class="muted" id="libStatus">0 uploaded</span>
       </div>
 
       <div class="panel-body">
@@ -376,9 +513,19 @@
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="preview-search">
+          <input id="previewSearch" type="text" placeholder="Search within preview..." />
+          <button class="btn secondary compact" id="btnSearchFind">Find</button>
+          <button class="btn secondary compact" id="btnSearchPrev">Prev</button>
+          <button class="btn secondary compact" id="btnSearchNext">Next</button>
+          <button class="btn secondary compact" id="btnSearchClear">Clear</button>
+          <span class="muted" id="searchMeta"></span>
+        </div>
 
         <div class="preview" id="preview">
-          <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
+          <div class="preview-inner">
+            <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
+          </div>
         </div>
       </div>
 
@@ -387,6 +534,8 @@
       </div>
     </div>
   </div>
+
+  <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
 
 <script>
 /**
@@ -412,6 +561,9 @@ const previewEl = $("#preview");
 const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
 const selectionNoteEl = $("#selectionNote");
+const previewSearchEl = $("#previewSearch");
+const searchMetaEl = $("#searchMeta");
+const btnToTopEl = $("#btnToTop");
 
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
@@ -420,6 +572,8 @@ const docCategoryEl = $("#docCategory");
 let state = loadLibrary();
 let activeDocId = null;
 let activeSiteDocPath = null;
+let searchMatches = [];
+let activeSearchIndex = -1;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -487,6 +641,40 @@ function groupByCategory(docs) {
   return out;
 }
 
+function getSubgroupLabel(doc) {
+  const parts = (doc.fileName || "")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length < 3) return "";
+  return parts[1];
+}
+
+function groupDocsBySubgroup(items) {
+  const groups = new Map();
+  for (const doc of items) {
+    const subgroup = getSubgroupLabel(doc) || "General";
+    if (!groups.has(subgroup)) groups.set(subgroup, []);
+    groups.get(subgroup).push(doc);
+  }
+
+  return [...groups.entries()].map(([name, docs]) => ({
+    name,
+    docs
+  }));
+}
+
+function toggleCategory(catEl, parentEl) {
+  const isOpening = !catEl.classList.contains("open");
+
+  for (const sibling of parentEl.querySelectorAll(".category.open")) {
+    sibling.classList.remove("open");
+  }
+
+  if (isOpening) catEl.classList.add("open");
+}
+
 function bytesFromBase64(b64) {
   const bin = atob(b64);
   const len = bin.length;
@@ -534,7 +722,7 @@ async function copyToClipboard(text) {
 function renderNav() {
   navEl.innerHTML = "";
   const docs = state.docs || [];
-  libStatusEl.textContent = `${docs.length} doc${docs.length === 1 ? "" : "s"}`;
+  libStatusEl.textContent = `${docs.length} uploaded`;
 
   if (!docs.length) {
     navEl.innerHTML = `<div class="muted">No documents yet. Upload one above.</div>`;
@@ -550,10 +738,10 @@ function renderNav() {
     const head = document.createElement("div");
     head.className = "cat-head";
     head.innerHTML = `
-      <span>${escapeHtml(cat)}</span>
+      <span class="cat-head-title">${escapeHtml(cat)}</span>
       <span class="cat-count">${items.length}</span>
     `;
-    head.addEventListener("click", () => catEl.classList.toggle("open"));
+    head.addEventListener("click", () => toggleCategory(catEl, navEl));
 
     const list = document.createElement("div");
     list.className = "doc-list";
@@ -610,25 +798,40 @@ function renderSiteDocsNav(siteDocs) {
     const head = document.createElement("div");
     head.className = "cat-head";
     head.innerHTML = `
-      <span>${escapeHtml(cat)}</span>
+      <span class="cat-head-title">${escapeHtml(cat)}</span>
       <span class="cat-count">${items.length}</span>
     `;
-    head.addEventListener("click", () => catEl.classList.toggle("open"));
+    head.addEventListener("click", () => toggleCategory(catEl, siteDocsNavEl));
 
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    for (const doc of items) {
-      const item = document.createElement("div");
-      item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
-      item.innerHTML = `
-        <div class="doc-meta">
-          <div class="doc-title">${escapeHtml(doc.title)}</div>
-          <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
-        </div>
-      `;
-      item.addEventListener("click", () => loadSiteDoc(doc));
-      list.appendChild(item);
+    const groupedItems = groupDocsBySubgroup(items);
+    for (const subgroup of groupedItems) {
+      const subgroupEl = document.createElement("div");
+      subgroupEl.className = "subgroup";
+
+      if (subgroup.name !== "General") {
+        const subgroupHead = document.createElement("div");
+        subgroupHead.className = "subgroup-head";
+        subgroupHead.textContent = subgroup.name;
+        subgroupEl.appendChild(subgroupHead);
+      }
+
+      for (const doc of subgroup.docs) {
+        const item = document.createElement("div");
+        item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+        item.innerHTML = `
+          <div class="doc-meta">
+            <div class="doc-title">${escapeHtml(doc.title)}</div>
+            <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+          </div>
+        `;
+        item.addEventListener("click", () => loadSiteDoc(doc));
+        subgroupEl.appendChild(item);
+      }
+
+      list.appendChild(subgroupEl);
     }
 
     catEl.appendChild(head);
@@ -671,6 +874,113 @@ function renderOutputRichText(html) {
   return container.innerHTML;
 }
 
+function setPreviewHtml(html) {
+  previewEl.innerHTML = `<div class="preview-inner">${html || '<div class="muted">No content.</div>'}</div>`;
+  refreshSearchHighlights();
+}
+
+function clearSearchHighlights() {
+  for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
+    mark.replaceWith(document.createTextNode(mark.textContent || ""));
+  }
+  searchMatches = [];
+  activeSearchIndex = -1;
+  updateSearchMeta();
+}
+
+function updateSearchMeta() {
+  if (!previewSearchEl.value.trim()) {
+    searchMetaEl.textContent = "";
+    return;
+  }
+  if (!searchMatches.length) {
+    searchMetaEl.textContent = "0 matches";
+    return;
+  }
+  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatches.length}`;
+}
+
+function runPreviewSearch() {
+  refreshSearchHighlights();
+}
+
+function jumpToSearchMatch(next = true) {
+  if (!searchMatches.length && previewSearchEl.value.trim()) {
+    refreshSearchHighlights();
+  }
+  if (!searchMatches.length) return;
+
+  searchMatches.forEach((el) => el.classList.remove("active"));
+  if (next) {
+    activeSearchIndex = (activeSearchIndex + 1) % searchMatches.length;
+  } else {
+    activeSearchIndex = (activeSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+  }
+
+  const target = searchMatches[activeSearchIndex];
+  target.classList.add("active");
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  updateSearchMeta();
+}
+
+function refreshSearchHighlights() {
+  const query = previewSearchEl.value.trim();
+  clearSearchHighlights();
+  if (!query) return;
+
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "gi");
+  const searchRoot = previewEl.querySelector(".preview-inner") || previewEl;
+  const walker = document.createTreeWalker(searchRoot, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (!node.parentElement) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement.closest("mark.search-hit")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const textNodes = [];
+  let node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue;
+    regex.lastIndex = 0;
+    if (!regex.test(text)) continue;
+
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    regex.lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      const [matched] = match;
+      const start = match.index;
+      if (start > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = matched;
+      fragment.appendChild(mark);
+      searchMatches.push(mark);
+
+      lastIndex = start + matched.length;
+    }
+
+    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+    textNode.replaceWith(fragment);
+  }
+
+  if (searchMatches.length) {
+    activeSearchIndex = -1;
+    jumpToSearchMatch(true);
+  } else {
+    updateSearchMeta();
+  }
+}
+
+
 async function loadDoc(docId) {
   const d = state.docs.find(x => x.id === docId);
   if (!d) return;
@@ -682,7 +992,7 @@ async function loadDoc(docId) {
   previewMetaEl.textContent = `${d.category || "Uncategorized"} • added ${new Date(d.addedAtISO).toLocaleString()}`;
   selectionNoteEl.textContent = `Selected: ${d.title || d.fileName}`;
 
-  previewEl.innerHTML = `<div class="muted">Rendering…</div>`;
+  setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
   try {
     const bytes = bytesFromBase64(d.docxBase64);
@@ -708,9 +1018,9 @@ async function loadDoc(docId) {
         </details>`
       : "";
 
-    previewEl.innerHTML = html + msgHtml;
+    setPreviewHtml(html + msgHtml);
   } catch (e) {
-    previewEl.innerHTML = `<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+    setPreviewHtml(`<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
@@ -722,7 +1032,7 @@ async function loadSiteDoc(doc) {
   previewTitleEl.textContent = doc.title;
   previewMetaEl.textContent = `Bundled doc • ${doc.fileName}`;
   selectionNoteEl.textContent = `Selected bundled doc: ${doc.title}`;
-  previewEl.innerHTML = `<div class="muted">Rendering…</div>`;
+  setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
   try {
     const response = await fetch(doc.path);
@@ -737,9 +1047,9 @@ async function loadSiteDoc(doc) {
         ignoreEmptyParagraphs: false
       }
     );
-    previewEl.innerHTML = renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>";
+    setPreviewHtml(renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>");
   } catch (e) {
-    previewEl.innerHTML = `<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+    setPreviewHtml(`<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
@@ -837,7 +1147,7 @@ function deleteDoc(docId) {
     previewTitleEl.textContent = "Preview";
     previewMetaEl.textContent = "";
     selectionNoteEl.textContent = "Nothing selected.";
-    previewEl.innerHTML = `<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`;
+    setPreviewHtml(`<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`);
   }
   saveLibrary();
   renderNav();
@@ -904,6 +1214,16 @@ async function copyPlainText() {
   alert("Copied plain text.");
 }
 
+function updateToTopVisibility() {
+  const shouldShow = window.scrollY > 200 || previewEl.scrollTop > 200;
+  btnToTopEl.classList.toggle("hidden", !shouldShow);
+}
+
+function scrollToTop() {
+  previewEl.scrollTo({ top: 0, behavior: "smooth" });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 // -------------------- Wire up events --------------------
 $("#btnAdd").addEventListener("click", addDocFromUpload);
 $("#btnTheme").addEventListener("click", toggleTheme);
@@ -917,11 +1237,29 @@ $("#importFile").addEventListener("change", (e) => {
 });
 
 $("#btnCopyText").addEventListener("click", copyPlainText);
+btnToTopEl.addEventListener("click", scrollToTop);
+previewEl.addEventListener("scroll", updateToTopVisibility);
+window.addEventListener("scroll", updateToTopVisibility);
+$("#btnSearchFind").addEventListener("click", runPreviewSearch);
+$("#btnSearchNext").addEventListener("click", () => jumpToSearchMatch(true));
+$("#btnSearchPrev").addEventListener("click", () => jumpToSearchMatch(false));
+$("#btnSearchClear").addEventListener("click", () => {
+  previewSearchEl.value = "";
+  clearSearchHighlights();
+});
+previewSearchEl.addEventListener("input", refreshSearchHighlights);
+previewSearchEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    jumpToSearchMatch(!e.shiftKey);
+  }
+});
 
 // Initial render
 renderNav();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
+updateToTopVisibility();
 </script>
 </body>
 </html>
