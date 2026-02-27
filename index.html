@@ -646,6 +646,14 @@ function escapeHtml(str) {
     .replaceAll("'","&#039;");
 }
 
+function buildBundledDocPath(fileName) {
+  const safeParts = (fileName || "")
+    .split("/")
+    .filter(Boolean)
+    .map((part) => encodeURIComponent(part));
+  return `./docs/word-docs/${safeParts.join("/")}`;
+}
+
 function renderOutputRichText(html) {
   const container = document.createElement("div");
   container.innerHTML = html || "";
@@ -767,7 +775,7 @@ async function loadBundledDocs() {
       .filter((doc) => doc && doc.fileName.toLowerCase().endsWith(".docx"))
       .map((doc) => ({
         ...doc,
-        path: `./docs/word-docs/${encodeURIComponent(doc.fileName)}`
+        path: buildBundledDocPath(doc.fileName)
       }));
 
     renderSiteDocsNav(docs);
