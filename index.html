@@ -190,13 +190,11 @@
 }
 
 .preview p {
-  margin: 6px 0;
+  margin: 10px 0;
 }
 
-/* Tighten consecutive lines (like submission lists) */
-.preview p + p {
-  margin-top: 2px;
-}
+.preview .subline { margin: 2px 0; }
+.preview .subblock { margin-top: 8px; }
 
 .preview h1,
 .preview h2,
@@ -578,6 +576,23 @@ function escapeHtml(str) {
     .replaceAll("'","&#039;");
 }
 
+function renderOutputRichText(html) {
+  const container = document.createElement("div");
+  container.innerHTML = html || "";
+
+  const submissionLinePattern = /^\s*\(\[[A-Za-z0-9\-]+\]\)\s+/;
+  for (const p of container.querySelectorAll("p")) {
+    if (!submissionLinePattern.test(p.textContent || "")) continue;
+
+    const line = document.createElement("div");
+    line.className = "subline";
+    while (p.firstChild) line.appendChild(p.firstChild);
+    p.replaceWith(line);
+  }
+
+  return container.innerHTML;
+}
+
 async function loadDoc(docId) {
   const d = state.docs.find(x => x.id === docId);
   if (!d) return;
@@ -603,7 +618,7 @@ async function loadDoc(docId) {
     );
 
     // Mammoth returns { value: "<p>...</p>", messages: [...] }
-    const html = result.value || "";
+    const html = renderOutputRichText(result.value || "");
     const messages = result.messages || [];
 
     const msgHtml = messages.length
@@ -644,7 +659,7 @@ async function loadSiteDoc(doc) {
         ignoreEmptyParagraphs: false
       }
     );
-    previewEl.innerHTML = result.value || "<div class=\"muted\">No content.</div>";
+    previewEl.innerHTML = renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>";
   } catch (e) {
     previewEl.innerHTML = `<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
   }
