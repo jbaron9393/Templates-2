@@ -576,7 +576,7 @@ const docCategoryEl = $("#docCategory");
 let state = loadLibrary();
 let activeDocId = null;
 let activeSiteDocPath = null;
-let searchMatches = [];
+let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let bundledStats = { docs: 0, categories: 0 };
@@ -892,7 +892,7 @@ function clearSearchHighlights() {
   for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
     mark.replaceWith(document.createTextNode(mark.textContent || ""));
   }
-  searchMatches = [];
+  searchMatchGroups = [];
   activeSearchIndex = -1;
   updateSearchMeta();
 }
@@ -902,11 +902,11 @@ function updateSearchMeta() {
     searchMetaEl.textContent = "";
     return;
   }
-  if (!searchMatches.length) {
+  if (!searchMatchGroups.length) {
     searchMetaEl.textContent = "0 matches";
     return;
   }
-  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatches.length}`;
+  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatchGroups.length}`;
 }
 
 function runPreviewSearch() {
@@ -914,21 +914,23 @@ function runPreviewSearch() {
 }
 
 function jumpToSearchMatch(next = true) {
-  if (!searchMatches.length && previewSearchEl.value.trim()) {
+  if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
     refreshSearchHighlights(false);
   }
-  if (!searchMatches.length) return;
+  if (!searchMatchGroups.length) return;
 
-  searchMatches.forEach((el) => el.classList.remove("active"));
+  searchMatchGroups.forEach((group) => {
+    group.marks.forEach((mark) => mark.classList.remove("active"));
+  });
   if (next) {
-    activeSearchIndex = (activeSearchIndex + 1) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex + 1) % searchMatchGroups.length;
   } else {
-    activeSearchIndex = (activeSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex - 1 + searchMatchGroups.length) % searchMatchGroups.length;
   }
 
-  const target = searchMatches[activeSearchIndex];
-  target.classList.add("active");
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const group = searchMatchGroups[activeSearchIndex];
+  group.marks.forEach((mark) => mark.classList.add("active"));
+  group.marks[0].scrollIntoView({ behavior: "smooth", block: "center" });
   updateSearchMeta();
 }
 
@@ -953,35 +955,59 @@ function refreshSearchHighlights(autoFocusFirst = true) {
   let node;
   while ((node = walker.nextNode())) textNodes.push(node);
 
+  const nodeRanges = [];
+  let fullText = "";
   for (const textNode of textNodes) {
-    const text = textNode.nodeValue;
-    regex.lastIndex = 0;
-    if (!regex.test(text)) continue;
+    const text = textNode.nodeValue || "";
+    const start = fullText.length;
+    fullText += text;
+    nodeRanges.push({ textNode, start, end: fullText.length });
+  }
 
-    const fragment = document.createDocumentFragment();
-    let lastIndex = 0;
-    regex.lastIndex = 0;
-    let match;
+  const matches = [];
+  regex.lastIndex = 0;
+  let match;
+  while ((match = regex.exec(fullText)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length });
+  }
 
-    while ((match = regex.exec(text)) !== null) {
-      const [matched] = match;
-      const start = match.index;
-      if (start > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+  let matchId = 0;
+  for (const currentMatch of matches) {
+    const group = { id: matchId++, marks: [] };
+    const touchedRanges = nodeRanges.filter((range) => range.end > currentMatch.start && range.start < currentMatch.end);
+
+    for (const range of touchedRanges) {
+      const nodeText = range.textNode.nodeValue || "";
+      const localStart = Math.max(0, currentMatch.start - range.start);
+      const localEnd = Math.min(nodeText.length, currentMatch.end - range.start);
+      if (localStart >= localEnd) continue;
+
+      const fragment = document.createDocumentFragment();
+      if (localStart > 0) fragment.appendChild(document.createTextNode(nodeText.slice(0, localStart)));
 
       const mark = document.createElement("mark");
       mark.className = "search-hit";
-      mark.textContent = matched;
+      mark.dataset.matchId = String(group.id);
+      mark.textContent = nodeText.slice(localStart, localEnd);
       fragment.appendChild(mark);
-      searchMatches.push(mark);
+      group.marks.push(mark);
 
-      lastIndex = start + matched.length;
+      if (localEnd < nodeText.length) fragment.appendChild(document.createTextNode(nodeText.slice(localEnd)));
+      range.textNode.replaceWith(fragment);
+
+      const tailNode = mark.nextSibling;
+      range.textNode = tailNode && tailNode.nodeType === Node.TEXT_NODE
+        ? tailNode
+        : document.createTextNode("");
+      if (!tailNode || tailNode.nodeType !== Node.TEXT_NODE) {
+        mark.after(range.textNode);
+      }
     }
 
-    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-    textNode.replaceWith(fragment);
+    if (group.marks.length) searchMatchGroups.push(group);
   }
 
-  if (searchMatches.length) {
+  if (searchMatchGroups.length) {
     activeSearchIndex = -1;
     if (autoFocusFirst) jumpToSearchMatch(true);
     else updateSearchMeta();
