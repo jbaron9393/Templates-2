@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Word Doc Viewer (Categories + Upload)</title>
+  <title>Word Doc Viewer (Categories + Upload + Site Docs)</title>
 
   <!-- Mammoth (DOCX -> HTML in browser) -->
   <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -222,6 +222,18 @@
 
       <div class="panel-body">
         <div class="row">
+          <label>Site Documents (from <code>/docs/word-docs</code>)</label>
+          <div class="muted">
+            Add <code>.docx</code> files to <code>/docs/word-docs</code>, then define each doc's
+            <code>fileName</code>, <code>title</code>, and <code>category</code> in
+            <code>/docs/word-docs/index.json</code>. They appear grouped by category on page load.
+          </div>
+          <div class="nav" id="siteDocsNav"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #eee;margin:14px 0;" />
+
+        <div class="row">
           <label for="docFile">Upload a .docx</label>
           <input type="file" id="docFile" accept=".docx" />
           <div class="muted">Client-side only. Stored in your browser (localStorage).</div>
@@ -295,6 +307,7 @@ const LS_KEY = "docLibrary.v1";
 
 const $ = (sel) => document.querySelector(sel);
 const navEl = $("#nav");
+const siteDocsNavEl = $("#siteDocsNav");
 const errEl = $("#err");
 const libStatusEl = $("#libStatus");
 
@@ -309,6 +322,7 @@ const docCategoryEl = $("#docCategory");
 
 let state = loadLibrary();
 let activeDocId = null;
+let activeSiteDocPath = null;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -316,6 +330,15 @@ function uuid() {
 }
 
 function nowISO() { return new Date().toISOString(); }
+
+function titleFromFileName(fileName) {
+  return (fileName || "Untitled")
+    .replace(/\.docx$/i, "")
+    .replaceAll(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b\w/g, ch => ch.toUpperCase());
+}
 
 function setError(msg) {
   errEl.textContent = msg || "";
@@ -460,6 +483,50 @@ function renderNav() {
   }
 }
 
+function renderSiteDocsNav(siteDocs) {
+  siteDocsNavEl.innerHTML = "";
+
+  if (!siteDocs.length) {
+    siteDocsNavEl.innerHTML = `<div class="muted">No bundled docs listed yet.</div>`;
+    return;
+  }
+
+  const groups = groupByCategory(siteDocs);
+
+  for (const [cat, items] of groups) {
+    const catEl = document.createElement("div");
+    catEl.className = "category open";
+
+    const head = document.createElement("div");
+    head.className = "cat-head";
+    head.innerHTML = `
+      <span>${escapeHtml(cat)}</span>
+      <span class="cat-count">${items.length}</span>
+    `;
+    head.addEventListener("click", () => catEl.classList.toggle("open"));
+
+    const list = document.createElement("div");
+    list.className = "doc-list";
+
+    for (const doc of items) {
+      const item = document.createElement("div");
+      item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+      item.innerHTML = `
+        <div class="doc-meta">
+          <div class="doc-title">${escapeHtml(doc.title)}</div>
+          <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+        </div>
+      `;
+      item.addEventListener("click", () => loadSiteDoc(doc));
+      list.appendChild(item);
+    }
+
+    catEl.appendChild(head);
+    catEl.appendChild(list);
+    siteDocsNavEl.appendChild(catEl);
+  }
+}
+
 function escapeHtml(str) {
   return (str ?? "").toString()
     .replaceAll("&","&amp;")
@@ -508,6 +575,69 @@ async function loadDoc(docId) {
     previewEl.innerHTML = html + msgHtml;
   } catch (e) {
     previewEl.innerHTML = `<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+  }
+}
+
+async function loadSiteDoc(doc) {
+  activeDocId = null;
+  activeSiteDocPath = doc.path;
+  renderNav();
+
+  previewTitleEl.textContent = doc.title;
+  previewMetaEl.textContent = `Bundled doc • ${doc.fileName}`;
+  selectionNoteEl.textContent = `Selected bundled doc: ${doc.title}`;
+  previewEl.innerHTML = `<div class="muted">Rendering…</div>`;
+
+  try {
+    const response = await fetch(doc.path);
+    if (!response.ok) throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
+
+    const buffer = await response.arrayBuffer();
+    const result = await mammoth.convertToHtml({ arrayBuffer: buffer });
+    previewEl.innerHTML = result.value || "<div class=\"muted\">No content.</div>";
+  } catch (e) {
+    previewEl.innerHTML = `<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+  }
+}
+
+async function loadBundledDocs() {
+  try {
+    const response = await fetch("./docs/word-docs/index.json", { cache: "no-store" });
+    if (!response.ok) throw new Error("index.json not found");
+
+    const payload = await response.json();
+    const entries = Array.isArray(payload.files) ? payload.files : [];
+
+    const docs = entries
+      .map((entry) => {
+        if (typeof entry === "string") {
+          return {
+            fileName: entry,
+            title: titleFromFileName(entry),
+            category: "Uncategorized"
+          };
+        }
+
+        if (!entry || typeof entry !== "object") return null;
+
+        const fileName = (entry.fileName || "").toString().trim();
+        if (!fileName) return null;
+
+        return {
+          fileName,
+          title: (entry.title || titleFromFileName(fileName)).toString().trim() || titleFromFileName(fileName),
+          category: (entry.category || "Uncategorized").toString().trim() || "Uncategorized"
+        };
+      })
+      .filter((doc) => doc && doc.fileName.toLowerCase().endsWith(".docx"))
+      .map((doc) => ({
+        ...doc,
+        path: `./docs/word-docs/${encodeURIComponent(doc.fileName)}`
+      }));
+
+    renderSiteDocsNav(docs);
+  } catch {
+    renderSiteDocsNav([]);
   }
 }
 
@@ -667,6 +797,7 @@ $("#btnCopyText").addEventListener("click", copyPlainText);
 
 // Initial render
 renderNav();
+loadBundledDocs();
 </script>
 </body>
 </html>
