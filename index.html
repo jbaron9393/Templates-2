@@ -285,7 +285,7 @@
       cursor:pointer;
     }
     .note-highlight {
-      animation: notePulse 1.3s ease;
+      animation: notePulse 2.2s ease;
       outline: 3px solid rgba(207,184,124,.8);
       border-radius: 4px;
     }
@@ -505,6 +505,20 @@
       padding: 7px 11px;
       font-size: .82rem;
     }
+    .quick-note-float {
+      bottom: 112px;
+      font-size: .82rem;
+      padding: 7px 11px;
+    }
+    .note-category-chip {
+      font-size: .72rem;
+      font-weight: 700;
+      border: 1px solid #d8c28a;
+      color: #735b22;
+      background: #fff8e7;
+      border-radius: 999px;
+      padding: 1px 7px;
+    }
 
     body.dark {
       background: #101317;
@@ -590,6 +604,11 @@
       border-color: #CFB87C;
       color: #CFB87C;
     }
+    body.dark .note-category-chip {
+      background: #3a3528;
+      border-color: #7e6b3a;
+      color: #f0dca8;
+    }
     body.dark .btn.secondary:hover,
     body.dark .icon-btn:hover {
       background: #323d4d;
@@ -655,8 +674,8 @@
         <hr class="section-break" />
 
         <div class="row">
-          <label for="docFile">Upload a .docx</label>
-          <input type="file" id="docFile" accept=".docx" />
+          <label for="docFile">Upload a .docx, .pdf, or .jpg</label>
+          <input type="file" id="docFile" accept=".docx,.pdf,.jpg,.jpeg,.png" />
           <div class="muted">Client-side only. Stored in your browser (localStorage).</div>
           <div class="danger" id="err"></div>
         </div>
@@ -730,7 +749,7 @@
       </div>
 
       <div class="footer-note">
-        Render engine: Mammoth.js (DOCX → HTML), plus in-browser PDF and image preview for bundled docs.
+        Render engine: Mammoth.js (DOCX → HTML), plus in-browser PDF and image preview for bundled and uploaded docs.
       </div>
     </div>
 
@@ -757,7 +776,7 @@
 
         <div class="preview" id="preview">
           <div class="preview-inner">
-            <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
+            <div class="muted">Upload a DOCX, PDF, or image and click it in the left sidebar.</div>
           </div>
         </div>
       </div>
@@ -771,6 +790,7 @@
   </div>
 
   <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
+  <button class="to-top-btn quick-note-float hidden" id="btnQuickNote" aria-label="Add note from selected text">📝 Add Note</button>
   <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
 
   <div class="modal-backdrop" id="noteModalBackdrop" aria-hidden="true">
@@ -778,6 +798,17 @@
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <strong id="noteModalTitle">New Note</strong>
         <button class="btn secondary compact" id="btnNoteClose">Close</button>
+      </div>
+      <div class="row two" style="margin-bottom:0;">
+        <div>
+          <label for="noteTitle">Title/Label</label>
+          <input id="noteTitle" type="text" placeholder="e.g., Margin note" />
+        </div>
+        <div>
+          <label for="noteCategory">Note Category</label>
+          <input id="noteCategory" type="text" list="noteCategoryList" placeholder="e.g., Grossing, Follow-up" />
+          <datalist id="noteCategoryList"></datalist>
+        </div>
       </div>
       <textarea id="noteText" placeholder="Write your note..."></textarea>
       <div class="modal-row" style="justify-content:flex-end;">
@@ -793,7 +824,7 @@
  * key: "docLibrary.v1"
  * library = {
  *   docs: [
- *     { id, title, category, docType, fileName, addedAtISO, docxBase64 }
+ *     { id, title, category, docType, fileName, addedAtISO, fileBase64, fileMime, docxBase64 }
  *   ]
  * }
  */
@@ -816,6 +847,7 @@ const DOC_TYPE_PRIORITY = {
   faq: 4,
   other: 5
 };
+const LOCAL_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 
 const $ = (sel) => document.querySelector(sel);
@@ -840,6 +872,7 @@ const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
 const btnToTopEl = $("#btnToTop");
 const btnClearSearchFloatEl = $("#btnClearSearchFloat");
+const btnQuickNoteEl = $("#btnQuickNote");
 const btnAddNoteEl = $("#btnAddNote");
 const btnNewNoteEl = $("#btnNewNote");
 
@@ -850,6 +883,9 @@ const docTypeEl = $("#docType");
 
 const noteModalBackdropEl = $("#noteModalBackdrop");
 const noteModalTitleEl = $("#noteModalTitle");
+const noteTitleEl = $("#noteTitle");
+const noteCategoryEl = $("#noteCategory");
+const noteCategoryListEl = $("#noteCategoryList");
 const noteTextEl = $("#noteText");
 
 let state = loadLibrary();
@@ -866,6 +902,7 @@ let leftSearchDocTextCache = new Map();
 let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
 let previewContentType = "docx";
+let activePreviewObjectUrl = null;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -937,11 +974,30 @@ function isBundledExtensionAllowed(fileName) {
   return BUNDLED_ALLOWED_EXTENSIONS.includes(getFileExtension(fileName));
 }
 
+function isLocalExtensionAllowed(fileName) {
+  return LOCAL_ALLOWED_EXTENSIONS.includes(getFileExtension(fileName));
+}
+
+function inferMimeTypeFromFileName(fileName) {
+  const ext = getFileExtension(fileName);
+  if (ext === ".pdf") return "application/pdf";
+  if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
+  if (ext === ".png") return "image/png";
+  if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  return "application/octet-stream";
+}
+
 function normalizeLibraryDoc(doc) {
   const normalizedType = getDocType(doc);
+  const fileName = (doc?.fileName || "").toString();
+  const fileBase64 = (doc?.fileBase64 || doc?.docxBase64 || "").toString();
+  const fileMime = (doc?.fileMime || inferMimeTypeFromFileName(fileName)).toString();
   return {
     ...doc,
-    docType: normalizedType
+    docType: normalizedType,
+    fileBase64,
+    fileMime,
+    docxBase64: getFileExtension(fileName) === ".docx" ? (doc?.docxBase64 || fileBase64) : (doc?.docxBase64 || "")
   };
 }
 
@@ -968,9 +1024,37 @@ function loadNotesOverlay() {
     const raw = localStorage.getItem(NOTES_KEY);
     if (!raw) return { notes: [] };
     const parsed = JSON.parse(raw);
-    return { notes: Array.isArray(parsed?.notes) ? parsed.notes : [] };
+    const notes = Array.isArray(parsed?.notes) ? parsed.notes.map(normalizeNote) : [];
+    return { notes };
   } catch {
     return { notes: [] };
+  }
+}
+
+function normalizeNote(note = {}) {
+  return {
+    ...note,
+    title: (note.title || '').toString().trim(),
+    category: (note.category || 'General').toString().trim() || 'General'
+  };
+}
+
+function uniqueNoteCategories() {
+  const categories = new Set(['General']);
+  for (const note of notesOverlay.notes || []) {
+    const category = (note?.category || '').toString().trim();
+    if (category) categories.add(category);
+  }
+  return [...categories].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function refreshNoteCategorySuggestions() {
+  if (!noteCategoryListEl) return;
+  noteCategoryListEl.innerHTML = '';
+  for (const category of uniqueNoteCategories()) {
+    const opt = document.createElement('option');
+    opt.value = category;
+    noteCategoryListEl.appendChild(opt);
   }
 }
 
@@ -1104,11 +1188,14 @@ function renderNotesList() {
     const row = document.createElement('div');
     row.className = 'note-item';
     const timestamp = new Date(note.updatedAtISO || note.createdAtISO || Date.now()).toLocaleString();
+    const title = (note.title || '').trim();
+    const category = (note.category || 'General').trim() || 'General';
     row.innerHTML = `
-      <div class="note-item-head"><span>Note</span><span>${escapeHtml(timestamp)}</span></div>
-      <div class="note-preview">${escapeHtml((note.text || '').split('\n')[0] || '(empty note)')}</div>
+      <div class="note-item-head"><span class="note-category-chip">${escapeHtml(category)}</span><span>${escapeHtml(timestamp)}</span></div>
+      <div class="note-preview">${escapeHtml(title || (note.text || '').split('\n')[0] || '(empty note)')}</div>
+      ${title ? `<div class="muted">${escapeHtml((note.text || '').split('\n')[0] || '(empty note)')}</div>` : ''}
       <div class="note-actions">
-        <button class="btn secondary compact" data-action="pin">Pin</button>
+        <button class="btn secondary compact" data-action="pin">Jump To Note</button>
         <button class="btn secondary compact" data-action="edit">Edit</button>
         <button class="btn secondary compact" data-action="delete">Delete</button>
       </div>
@@ -1136,9 +1223,12 @@ function openNoteModal({ mode = 'create', note = null, capturedAnchor = null } =
 
   noteEditorState = { mode, noteId: note?.id || null, capturedAnchor: capturedAnchor || null };
   noteModalTitleEl.textContent = mode === 'edit' ? 'Edit Note' : 'New Note';
+  noteTitleEl.value = note?.title || '';
+  noteCategoryEl.value = note?.category || 'General';
+  refreshNoteCategorySuggestions();
   noteTextEl.value = note?.text || '';
   noteModalBackdropEl.classList.add('open');
-  noteTextEl.focus();
+  noteTitleEl.focus();
 }
 
 function closeNoteModal() {
@@ -1151,12 +1241,15 @@ function deleteNote(noteId) {
   saveNotesOverlay();
   renderNotesList();
   renderNoteMarkers();
+  refreshNoteCategorySuggestions();
 }
 
 function saveNoteFromModal() {
   const ctx = getActiveDocContext();
   if (!ctx) return;
   const text = (noteTextEl.value || '').trim();
+  const title = (noteTitleEl.value || '').trim();
+  const category = (noteCategoryEl.value || '').trim() || 'General';
   if (!text) {
     alert('Please add note text.');
     return;
@@ -1167,6 +1260,8 @@ function saveNoteFromModal() {
   if (noteEditorState.mode === 'edit' && noteEditorState.noteId) {
     const found = notesOverlay.notes.find((n) => n.id === noteEditorState.noteId);
     if (found) {
+      found.title = title;
+      found.category = category;
       found.text = text;
       const updatedAnchor = createAnchorFromSelection();
       if (updatedAnchor) found.anchor = updatedAnchor;
@@ -1186,6 +1281,8 @@ function saveNoteFromModal() {
       docKey: ctx.docKey,
       docTitle: ctx.docTitle,
       anchor,
+      title,
+      category,
       text,
       tags: [],
       createdAtISO: stamp,
@@ -1197,12 +1294,13 @@ function saveNoteFromModal() {
   closeNoteModal();
   renderNotesList();
   renderNoteMarkers();
+  refreshNoteCategorySuggestions();
 }
 
 function highlightAnchorElement(el) {
   if (!el) return;
   el.classList.add('note-highlight');
-  setTimeout(() => el.classList.remove('note-highlight'), 1500);
+  setTimeout(() => el.classList.remove('note-highlight'), 2500);
 }
 
 function normalizeTextForMatch(value = '') {
@@ -1342,10 +1440,15 @@ function renderNoteMarkers() {
 
 function updateAddNoteButtonState() {
   const hasDoc = !!getActiveDocContext();
-  if (!btnAddNoteEl) return;
-  btnAddNoteEl.disabled = !hasDoc;
   const hasSelection = !!getCurrentSelectionInfo();
-  btnAddNoteEl.textContent = hasSelection ? 'Add Note to Selection' : 'Add Note';
+  if (btnAddNoteEl) {
+    btnAddNoteEl.disabled = !hasDoc;
+    btnAddNoteEl.textContent = hasSelection ? 'Add Note to Selection' : 'Add Note';
+  }
+
+  if (!btnQuickNoteEl) return;
+  const canQuickAdd = hasDoc && hasSelection && previewContentType === 'docx';
+  btnQuickNoteEl.classList.toggle('hidden', !canQuickAdd);
 }
 
 
@@ -1415,8 +1518,8 @@ async function queueLeftSearchIndexDoc(doc) {
         const buffer = await response.arrayBuffer();
         extracted = await extractRawSearchTextFromArrayBuffer(buffer);
       }
-    } else if (doc?.docxBase64) {
-      const bytes = bytesFromBase64(doc.docxBase64);
+    } else if (getFileExtension(doc?.fileName) === ".docx" && (doc?.fileBase64 || doc?.docxBase64)) {
+      const bytes = bytesFromBase64(doc.fileBase64 || doc.docxBase64);
       extracted = await extractRawSearchTextFromArrayBuffer(bytes.buffer);
     }
 
@@ -1788,7 +1891,11 @@ function renderOutputRichText(html) {
   return container.innerHTML;
 }
 
-function setPreviewHtml(html) {
+function setPreviewHtml(html, { objectUrl = null } = {}) {
+  if (activePreviewObjectUrl && activePreviewObjectUrl !== objectUrl) {
+    URL.revokeObjectURL(activePreviewObjectUrl);
+  }
+  activePreviewObjectUrl = objectUrl;
   previewEl.innerHTML = `<div class="preview-inner">${html || '<div class="muted">No content.</div>'}</div>`;
   refreshSearchHighlights();
   renderNoteMarkers();
@@ -1953,7 +2060,8 @@ async function loadDoc(docId) {
 
   activeDocId = docId;
   activeSiteDocPath = null;
-  previewContentType = "docx";
+  const ext = getFileExtension(d.fileName);
+  previewContentType = ext === ".docx" ? "docx" : "binary";
   renderNav();
   renderNotesList();
 
@@ -1962,8 +2070,25 @@ async function loadDoc(docId) {
 
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
+  const bytes = bytesFromBase64(d.fileBase64 || d.docxBase64 || "");
+  if (!bytes.byteLength) {
+    setPreviewHtml(`<div class="danger">This uploaded file appears empty.</div>`);
+    return;
+  }
+
+  if (ext === ".pdf") {
+    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || "application/pdf" }));
+    setPreviewHtml(`<iframe src="${fileUrl}" style="width:100%;min-height:75vh;border:none;" title="${escapeHtml(d.title)}"></iframe>`, { objectUrl: fileUrl });
+    return;
+  }
+
+  if ([".jpg", ".jpeg", ".png"].includes(ext)) {
+    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
+    setPreviewHtml(`<img src="${fileUrl}" alt="${escapeHtml(d.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`, { objectUrl: fileUrl });
+    return;
+  }
+
   try {
-    const bytes = bytesFromBase64(d.docxBase64);
     const result = await mammoth.convertToHtml(
       { arrayBuffer: bytes.buffer },
       MAMMOTH_OPTIONS
@@ -1984,7 +2109,7 @@ async function loadDoc(docId) {
 
     setPreviewHtml(html + msgHtml);
   } catch (e) {
-    setPreviewHtml(`<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
+    setPreviewHtml(`<div class="danger">Failed to render file: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
@@ -2091,15 +2216,16 @@ async function addDocFromUpload() {
   setError("");
 
   const file = docFileEl.files?.[0];
-  if (!file) return setError("Choose a .docx file first.");
+  if (!file) return setError("Choose a .docx, .pdf, or .jpg file first.");
 
-  const title = (docTitleEl.value || "").trim() || file.name.replace(/\.docx$/i, "");
+  const ext = getFileExtension(file.name);
+  if (!isLocalExtensionAllowed(file.name)) {
+    return setError("Only .docx, .pdf, .jpg, .jpeg, and .png files are supported.");
+  }
+
+  const title = (docTitleEl.value || "").trim() || titleFromFileName(file.name);
   const category = (docCategoryEl.value || "").trim() || "Uncategorized";
   const docType = normalizeDocType(docTypeEl.value) || inferDocType({ title, fileName: file.name });
-
-  if (!file.name.toLowerCase().endsWith(".docx")) {
-    return setError("That file doesn't look like a .docx.");
-  }
 
   // Read file -> base64
   const buf = await file.arrayBuffer();
@@ -2113,7 +2239,9 @@ async function addDocFromUpload() {
     fileName: file.name,
     addedAtISO: nowISO(),
     docType,
-    docxBase64: b64
+    fileBase64: b64,
+    fileMime: file.type || inferMimeTypeFromFileName(file.name),
+    docxBase64: ext === ".docx" ? b64 : ""
   };
 
   state.docs.unshift(doc);
@@ -2144,7 +2272,7 @@ function deleteDoc(docId) {
     activeDocId = null;
     previewTitleEl.textContent = "Preview";
     previewMetaEl.textContent = "";
-    setPreviewHtml(`<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`);
+    setPreviewHtml(`<div class="muted">Upload a DOCX, PDF, or image and click it in the left sidebar.</div>`);
   }
   renderNotesList();
   saveLibrary();
@@ -2194,6 +2322,8 @@ function importLibraryFromFile(file) {
       const normalizedDocs = incomingDocs.map((d) => {
         const title = d.title || d.fileName || "Untitled";
         const fileName = d.fileName || "imported.docx";
+        const ext = getFileExtension(fileName);
+        const fileBase64 = (d.fileBase64 || d.docxBase64 || "").toString();
         return {
           id: existingIds.has(d.id) ? uuid() : (d.id || uuid()),
           title,
@@ -2201,9 +2331,11 @@ function importLibraryFromFile(file) {
           fileName,
           addedAtISO: d.addedAtISO || nowISO(),
           docType: normalizeDocType(d.docType) || inferDocType({ title, fileName }),
-          docxBase64: d.docxBase64 || ""
+          fileBase64,
+          fileMime: d.fileMime || inferMimeTypeFromFileName(fileName),
+          docxBase64: ext === ".docx" ? ((d.docxBase64 || fileBase64 || "").toString()) : ""
         };
-      }).filter((d) => d.docxBase64);
+      }).filter((d) => d.fileBase64 && isLocalExtensionAllowed(d.fileName));
 
       state.docs = [...normalizedDocs, ...state.docs];
 
@@ -2217,7 +2349,7 @@ function importLibraryFromFile(file) {
         const nextId = existingNoteIds.has(note.id) ? uuid() : (note.id || uuid());
         if (existingNoteIds.has(nextId)) continue;
         existingNoteIds.add(nextId);
-        notesOverlay.notes.push({
+        notesOverlay.notes.push(normalizeNote({
           id: nextId,
           docKey: note.docKey || '',
           docTitle: note.docTitle || 'Untitled',
@@ -2229,11 +2361,13 @@ function importLibraryFromFile(file) {
             contextAfter: note.anchor?.contextAfter || '',
             scrollTop: typeof note.anchor?.scrollTop === 'number' ? note.anchor.scrollTop : 0
           },
+          title: (note.title || '').toString(),
+          category: (note.category || 'General').toString() || 'General',
           text: (note.text || '').toString(),
           tags: Array.isArray(note.tags) ? note.tags : [],
           createdAtISO: note.createdAtISO || nowISO(),
           updatedAtISO: note.updatedAtISO || nowISO()
-        });
+        }));
         importedNotes += 1;
       }
 
@@ -2243,6 +2377,7 @@ function importLibraryFromFile(file) {
       renderNav();
       renderNotesList();
       renderNoteMarkers();
+      refreshNoteCategorySuggestions();
       alert(`Imported ${normalizedDocs.length} doc(s) and ${importedNotes} note(s).`);
     } catch (e) {
       alert(`Import failed: ${e.message || e}`);
@@ -2256,6 +2391,15 @@ async function copyPlainText() {
   const text = previewEl.innerText || "";
   await copyToClipboard(text);
   alert("Copied plain text.");
+}
+
+function openCreateNoteFromSelection() {
+  const capturedAnchor = createAnchorFromSelection();
+  if (!capturedAnchor) {
+    alert('Highlight text in the preview first, then click Add Note.');
+    return;
+  }
+  openNoteModal({ mode: 'create', capturedAnchor });
 }
 
 function updateToTopVisibility() {
@@ -2353,22 +2497,9 @@ $("#importFile").addEventListener("change", (e) => {
 
 $("#btnCopyText").addEventListener("click", copyPlainText);
 
-btnAddNoteEl.addEventListener("click", () => {
-  const capturedAnchor = createAnchorFromSelection();
-  if (!capturedAnchor) {
-    alert('Highlight text in the preview first, then click Add Note.');
-    return;
-  }
-  openNoteModal({ mode: 'create', capturedAnchor });
-});
-btnNewNoteEl.addEventListener("click", () => {
-  const capturedAnchor = createAnchorFromSelection();
-  if (!capturedAnchor) {
-    alert('Highlight text in the preview first, then click Add Note.');
-    return;
-  }
-  openNoteModal({ mode: 'create', capturedAnchor });
-});
+btnAddNoteEl.addEventListener("click", openCreateNoteFromSelection);
+btnNewNoteEl.addEventListener("click", openCreateNoteFromSelection);
+btnQuickNoteEl.addEventListener("click", openCreateNoteFromSelection);
 notesShowAllEl.addEventListener("change", renderNotesList);
 notesHeadEl.addEventListener("click", () => {
   notesCategoryEl.classList.toggle("open");
@@ -2384,6 +2515,8 @@ noteModalBackdropEl.addEventListener("click", (e) => {
 document.addEventListener("selectionchange", () => {
   updateAddNoteButtonState();
 });
+previewEl.addEventListener("mouseup", updateAddNoteButtonState);
+previewEl.addEventListener("keyup", updateAddNoteButtonState);
 leftSearchEl.addEventListener("input", () => {
   leftSearchQuery = normalizeSearchValue(leftSearchEl.value);
   if (leftSearchQuery) queueLeftSearchIndexAll();
@@ -2422,6 +2555,7 @@ updateFloatingSearchClear();
 updateLeftSearchMeta();
 initPanelResizer();
 renderNotesList();
+refreshNoteCategorySuggestions();
 updateAddNoteButtonState();
 </script>
 </body>
