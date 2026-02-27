@@ -213,8 +213,8 @@
     .subgroup {
       border: 1px solid #f0f0f0;
       border-radius: 8px;
-      padding: 8px;
       background: #fcfcfc;
+      overflow: hidden;
     }
     .subgroup + .subgroup {
       margin-top: 6px;
@@ -225,10 +225,31 @@
       letter-spacing: .03em;
       text-transform: uppercase;
       color: #555;
-      margin-bottom: 6px;
-      padding-bottom: 4px;
+      padding: 8px 10px;
       border-bottom: 1px solid #efefef;
       overflow-wrap: anywhere;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .subgroup-head::after {
+      content: "▸";
+      font-size: .72rem;
+      opacity: .85;
+      transition: transform .14s ease;
+    }
+    .subgroup.open .subgroup-head::after {
+      transform: rotate(90deg);
+    }
+    .subgroup-body {
+      display: none;
+      padding: 8px;
+    }
+    .subgroup.open .subgroup-body {
+      display: block;
     }
 
     .doc-actions { display:flex; gap:8px; }
@@ -661,6 +682,31 @@ function getSubgroupLabel(doc) {
   return parts[1];
 }
 
+function subgroupSortValue(name) {
+  const value = (name || "").trim();
+  if (!value || value.toLowerCase() === "general") return { rank: 1, text: "general", num: Number.POSITIVE_INFINITY };
+
+  const match = value.match(/^(.*?)(\d+)$/);
+  if (match) {
+    return {
+      rank: 0,
+      text: match[1].trim().toLowerCase(),
+      num: Number(match[2])
+    };
+  }
+
+  return { rank: 0, text: value.toLowerCase(), num: Number.POSITIVE_INFINITY };
+}
+
+function compareSubgroups(a, b) {
+  const av = subgroupSortValue(a);
+  const bv = subgroupSortValue(b);
+  if (av.rank !== bv.rank) return av.rank - bv.rank;
+  if (av.text !== bv.text) return av.text.localeCompare(bv.text, undefined, { numeric: true, sensitivity: "base" });
+  if (av.num !== bv.num) return av.num - bv.num;
+  return (a || "").localeCompare(b || "", undefined, { numeric: true, sensitivity: "base" });
+}
+
 function groupDocsBySubgroup(items) {
   const groups = new Map();
   for (const doc of items) {
@@ -669,10 +715,12 @@ function groupDocsBySubgroup(items) {
     groups.get(subgroup).push(doc);
   }
 
-  return [...groups.entries()].map(([name, docs]) => ({
-    name,
-    docs
-  }));
+  return [...groups.entries()]
+    .sort(([a], [b]) => compareSubgroups(a, b))
+    .map(([name, docs]) => ({
+      name,
+      docs: docs.slice().sort((x, y) => (x.title || "").localeCompare(y.title || "", undefined, { numeric: true, sensitivity: "base" }))
+    }));
 }
 
 function toggleCategory(catEl, parentEl) {
@@ -818,14 +866,22 @@ function renderSiteDocsNav(siteDocs) {
     const groupedItems = groupDocsBySubgroup(items);
     for (const subgroup of groupedItems) {
       const subgroupEl = document.createElement("div");
-      subgroupEl.className = "subgroup";
+      const hasActiveDoc = subgroup.docs.some((doc) => doc.path === activeSiteDocPath);
+      subgroupEl.className = "subgroup" + (hasActiveDoc ? " open" : "");
 
-      if (subgroup.name !== "General") {
-        const subgroupHead = document.createElement("div");
-        subgroupHead.className = "subgroup-head";
-        subgroupHead.textContent = subgroup.name;
-        subgroupEl.appendChild(subgroupHead);
-      }
+      const subgroupHead = document.createElement("div");
+      subgroupHead.className = "subgroup-head";
+      subgroupHead.innerHTML = `
+        <span>${escapeHtml(subgroup.name)}</span>
+        <span class="cat-count">${subgroup.docs.length}</span>
+      `;
+      subgroupHead.addEventListener("click", () => {
+        subgroupEl.classList.toggle("open");
+      });
+      subgroupEl.appendChild(subgroupHead);
+
+      const subgroupBody = document.createElement("div");
+      subgroupBody.className = "subgroup-body";
 
       for (const doc of subgroup.docs) {
         const item = document.createElement("div");
@@ -837,9 +893,10 @@ function renderSiteDocsNav(siteDocs) {
           </div>
         `;
         item.addEventListener("click", () => loadSiteDoc(doc));
-        subgroupEl.appendChild(item);
+        subgroupBody.appendChild(item);
       }
 
+      subgroupEl.appendChild(subgroupBody);
       list.appendChild(subgroupEl);
     }
 
