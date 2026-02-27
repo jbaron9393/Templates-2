@@ -228,13 +228,41 @@
     .icon-btn:hover { background:#f3f3f3; }
 
 .preview {
-  padding: 16px;
+  padding: 0;
   background: #fafafa;
   border: 1px solid #eee;
   border-radius: 10px;
   overflow: auto;
   min-height: 0;
   line-height: 1.2;
+}
+
+.preview-inner {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 28px 40px;
+}
+
+.preview-search {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.preview-search input {
+  min-width: 220px;
+  flex: 1;
+}
+
+.search-hit {
+  background: #fff09b;
+  color: #222;
+  padding: 0 1px;
+}
+
+.search-hit.active {
+  background: #ffcd38;
 }
 
 .preview p {
@@ -309,6 +337,14 @@
     body.dark .category > .cat-head,
     body.dark .preview {
       background: #171d26;
+    }
+    body.dark .search-hit {
+      background: #6c5d14;
+      color: #fff;
+    }
+    body.dark .search-hit.active {
+      background: #c79c12;
+      color: #111;
     }
     body.dark .subgroup {
       background: #1e2531;
@@ -425,9 +461,18 @@
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="preview-search">
+          <input id="previewSearch" type="text" placeholder="Search within preview..." />
+          <button class="btn secondary compact" id="btnSearchPrev">Prev</button>
+          <button class="btn secondary compact" id="btnSearchNext">Next</button>
+          <button class="btn secondary compact" id="btnSearchClear">Clear</button>
+          <span class="muted" id="searchMeta"></span>
+        </div>
 
         <div class="preview" id="preview">
-          <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
+          <div class="preview-inner">
+            <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
+          </div>
         </div>
       </div>
 
@@ -461,6 +506,8 @@ const previewEl = $("#preview");
 const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
 const selectionNoteEl = $("#selectionNote");
+const previewSearchEl = $("#previewSearch");
+const searchMetaEl = $("#searchMeta");
 
 const docFileEl = $("#docFile");
 const docTitleEl = $("#docTitle");
@@ -469,6 +516,8 @@ const docCategoryEl = $("#docCategory");
 let state = loadLibrary();
 let activeDocId = null;
 let activeSiteDocPath = null;
+let searchMatches = [];
+let activeSearchIndex = -1;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -769,6 +818,105 @@ function renderOutputRichText(html) {
   return container.innerHTML;
 }
 
+function setPreviewHtml(html) {
+  previewEl.innerHTML = `<div class="preview-inner">${html || '<div class="muted">No content.</div>'}</div>`;
+  refreshSearchHighlights();
+}
+
+function clearSearchHighlights() {
+  for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
+    mark.replaceWith(document.createTextNode(mark.textContent || ""));
+  }
+  searchMatches = [];
+  activeSearchIndex = -1;
+  updateSearchMeta();
+}
+
+function updateSearchMeta() {
+  if (!previewSearchEl.value.trim()) {
+    searchMetaEl.textContent = "";
+    return;
+  }
+  if (!searchMatches.length) {
+    searchMetaEl.textContent = "0 matches";
+    return;
+  }
+  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatches.length}`;
+}
+
+function jumpToSearchMatch(next = true) {
+  if (!searchMatches.length) return;
+
+  searchMatches.forEach((el) => el.classList.remove("active"));
+  if (next) {
+    activeSearchIndex = (activeSearchIndex + 1) % searchMatches.length;
+  } else {
+    activeSearchIndex = (activeSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+  }
+
+  const target = searchMatches[activeSearchIndex];
+  target.classList.add("active");
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  updateSearchMeta();
+}
+
+function refreshSearchHighlights() {
+  const query = previewSearchEl.value.trim();
+  clearSearchHighlights();
+  if (!query) return;
+
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(escaped, "gi");
+  const walker = document.createTreeWalker(previewEl, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!node.nodeValue || !node.nodeValue.trim()) return NodeFilter.FILTER_REJECT;
+      if (!node.parentElement) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement.closest("mark.search-hit")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+
+  const textNodes = [];
+  let node;
+  while ((node = walker.nextNode())) textNodes.push(node);
+
+  for (const textNode of textNodes) {
+    const text = textNode.nodeValue;
+    regex.lastIndex = 0;
+    if (!regex.test(text)) continue;
+
+    const fragment = document.createDocumentFragment();
+    let lastIndex = 0;
+    regex.lastIndex = 0;
+    let match;
+
+    while ((match = regex.exec(text)) !== null) {
+      const [matched] = match;
+      const start = match.index;
+      if (start > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+
+      const mark = document.createElement("mark");
+      mark.className = "search-hit";
+      mark.textContent = matched;
+      fragment.appendChild(mark);
+      searchMatches.push(mark);
+
+      lastIndex = start + matched.length;
+    }
+
+    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+    textNode.replaceWith(fragment);
+  }
+
+  if (searchMatches.length) {
+    activeSearchIndex = -1;
+    jumpToSearchMatch(true);
+  } else {
+    updateSearchMeta();
+  }
+}
+
+
 async function loadDoc(docId) {
   const d = state.docs.find(x => x.id === docId);
   if (!d) return;
@@ -780,7 +928,7 @@ async function loadDoc(docId) {
   previewMetaEl.textContent = `${d.category || "Uncategorized"} • added ${new Date(d.addedAtISO).toLocaleString()}`;
   selectionNoteEl.textContent = `Selected: ${d.title || d.fileName}`;
 
-  previewEl.innerHTML = `<div class="muted">Rendering…</div>`;
+  setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
   try {
     const bytes = bytesFromBase64(d.docxBase64);
@@ -806,9 +954,9 @@ async function loadDoc(docId) {
         </details>`
       : "";
 
-    previewEl.innerHTML = html + msgHtml;
+    setPreviewHtml(html + msgHtml);
   } catch (e) {
-    previewEl.innerHTML = `<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+    setPreviewHtml(`<div class="danger">Failed to render DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
@@ -820,7 +968,7 @@ async function loadSiteDoc(doc) {
   previewTitleEl.textContent = doc.title;
   previewMetaEl.textContent = `Bundled doc • ${doc.fileName}`;
   selectionNoteEl.textContent = `Selected bundled doc: ${doc.title}`;
-  previewEl.innerHTML = `<div class="muted">Rendering…</div>`;
+  setPreviewHtml(`<div class="muted">Rendering…</div>`);
 
   try {
     const response = await fetch(doc.path);
@@ -835,9 +983,9 @@ async function loadSiteDoc(doc) {
         ignoreEmptyParagraphs: false
       }
     );
-    previewEl.innerHTML = renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>";
+    setPreviewHtml(renderOutputRichText(result.value || "") || "<div class=\"muted\">No content.</div>");
   } catch (e) {
-    previewEl.innerHTML = `<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`;
+    setPreviewHtml(`<div class="danger">Failed to render bundled DOCX: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
@@ -935,7 +1083,7 @@ function deleteDoc(docId) {
     previewTitleEl.textContent = "Preview";
     previewMetaEl.textContent = "";
     selectionNoteEl.textContent = "Nothing selected.";
-    previewEl.innerHTML = `<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`;
+    setPreviewHtml(`<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`);
   }
   saveLibrary();
   renderNav();
@@ -1015,6 +1163,19 @@ $("#importFile").addEventListener("change", (e) => {
 });
 
 $("#btnCopyText").addEventListener("click", copyPlainText);
+$("#btnSearchNext").addEventListener("click", () => jumpToSearchMatch(true));
+$("#btnSearchPrev").addEventListener("click", () => jumpToSearchMatch(false));
+$("#btnSearchClear").addEventListener("click", () => {
+  previewSearchEl.value = "";
+  clearSearchHighlights();
+});
+previewSearchEl.addEventListener("input", refreshSearchHighlights);
+previewSearchEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    jumpToSearchMatch(!e.shiftKey);
+  }
+});
 
 // Initial render
 renderNav();
