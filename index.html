@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Word Doc Viewer (Categories + Upload + Site Docs)</title>
+  <title>Grossing Manual</title>
+  <link rel="icon" type="image/svg+xml" href="./blood-drop.svg" />
 
   <!-- Mammoth (DOCX -> HTML in browser) -->
   <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
@@ -16,6 +17,7 @@
       background: #f5f5f5;
       color: #222;
       line-height: 1.5;
+      transition: background .2s ease, color .2s ease;
     }
     .header {
       background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
@@ -111,6 +113,11 @@
       color: #222;
     }
     .btn.secondary:hover { background:#eee; }
+    .btn.compact {
+      padding: 6px 10px;
+      font-size: .82rem;
+      border-width: 1px;
+    }
 
     .muted { color: #666; font-size: .85rem; }
     .danger { color: #b00020; font-size: .85rem; }
@@ -235,20 +242,70 @@
     .preview img { max-width: 100%; height: auto; }
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
+
+    body.dark {
+      background: #101317;
+      color: #e9edf2;
+    }
+    body.dark .panel,
+    body.dark .preview,
+    body.dark input[type="text"],
+    body.dark select,
+    body.dark input[type="file"],
+    body.dark .doc-list,
+    body.dark .icon-btn {
+      background: #1b212a;
+      color: #e9edf2;
+      border-color: #303947;
+    }
+    body.dark .panel-header,
+    body.dark .footer-note,
+    body.dark .category,
+    body.dark .category > .cat-head,
+    body.dark .doc-item {
+      border-color: #303947;
+    }
+    body.dark .category > .cat-head,
+    body.dark .preview {
+      background: #171d26;
+    }
+    body.dark .category > .cat-head:hover,
+    body.dark .doc-item:hover,
+    body.dark .doc-item.active {
+      background: #232b36;
+      border-color: #CFB87C;
+    }
+    body.dark .muted,
+    body.dark .doc-sub,
+    body.dark .cat-count,
+    body.dark label,
+    body.dark .footer-note,
+    body.dark .header small {
+      color: #b5becc;
+    }
+    body.dark .btn.secondary {
+      background: #27303d;
+      color: #e9edf2;
+      border-color: #3a4453;
+    }
+    body.dark .btn.secondary:hover,
+    body.dark .icon-btn:hover {
+      background: #323d4d;
+    }
   </style>
 </head>
 
 <body>
   <div class="header">
     <div>
-      <h1>Word Doc Viewer</h1>
+      <h1>Grossing Manual</h1>
       <small>Upload DOCX → assign category → click left nav to render on the right</small>
     </div>
     <div style="display:flex; gap:10px; align-items:center;">
       <button class="btn secondary" id="btnExport">Export Library (JSON)</button>
+      <button class="btn secondary" id="btnTheme">Dark Mode</button>
       <button class="btn secondary" id="btnImport">Import Library (JSON)</button>
       <input type="file" id="importFile" accept="application/json" style="display:none;" />
-      <button class="btn" id="btnClearAll">Clear All</button>
     </div>
   </div>
 
@@ -312,14 +369,13 @@
     <div class="panel right">
       <div class="panel-header">
         <span id="previewTitle">Preview</span>
-        <span class="muted" id="previewMeta"></span>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <button class="btn secondary compact" id="btnCopyText">Copy Text</button>
+          <span class="muted" id="previewMeta"></span>
+        </div>
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
-        <div class="row two" style="margin-bottom:0;">
-          <button class="btn secondary" id="btnCopyHtml">Copy Rendered HTML</button>
-          <button class="btn secondary" id="btnCopyText">Copy Plain Text</button>
-        </div>
 
         <div class="preview" id="preview">
           <div class="muted">Upload a DOCX and click it in the left sidebar.</div>
@@ -344,6 +400,7 @@
  */
 
 const LS_KEY = "docLibrary.v1";
+const THEME_KEY = "docViewer.theme.v1";
 
 const $ = (sel) => document.querySelector(sel);
 const navEl = $("#nav");
@@ -398,6 +455,19 @@ function loadLibrary() {
   } catch {
     return { docs: [] };
   }
+}
+
+
+function setTheme(theme) {
+  const isDark = theme === "dark";
+  document.body.classList.toggle("dark", isDark);
+  $("#btnTheme").textContent = isDark ? "Light Mode" : "Dark Mode";
+  localStorage.setItem(THEME_KEY, isDark ? "dark" : "light");
+}
+
+function toggleTheme() {
+  const next = document.body.classList.contains("dark") ? "light" : "dark";
+  setTheme(next);
 }
 
 function groupByCategory(docs) {
@@ -819,26 +889,7 @@ function importLibraryFromFile(file) {
   reader.readAsText(file);
 }
 
-function clearAll() {
-  const ok = confirm("Clear the entire library stored in this browser?");
-  if (!ok) return;
-  state = { docs: [] };
-  activeDocId = null;
-  localStorage.removeItem(LS_KEY);
-  renderNav();
-  previewTitleEl.textContent = "Preview";
-  previewMetaEl.textContent = "";
-  selectionNoteEl.textContent = "Nothing selected.";
-  previewEl.innerHTML = `<div class="muted">Upload a DOCX and click it in the left sidebar.</div>`;
-}
-
-// -------------------- Copy buttons --------------------
-async function copyRenderedHtml() {
-  const html = previewEl.innerHTML || "";
-  await copyToClipboard(html);
-  alert("Copied rendered HTML.");
-}
-
+// -------------------- Copy button --------------------
 async function copyPlainText() {
   const text = previewEl.innerText || "";
   await copyToClipboard(text);
@@ -847,7 +898,7 @@ async function copyPlainText() {
 
 // -------------------- Wire up events --------------------
 $("#btnAdd").addEventListener("click", addDocFromUpload);
-$("#btnClearAll").addEventListener("click", clearAll);
+$("#btnTheme").addEventListener("click", toggleTheme);
 
 $("#btnExport").addEventListener("click", exportLibrary);
 $("#btnImport").addEventListener("click", () => $("#importFile").click());
@@ -857,12 +908,12 @@ $("#importFile").addEventListener("change", (e) => {
   e.target.value = "";
 });
 
-$("#btnCopyHtml").addEventListener("click", copyRenderedHtml);
 $("#btnCopyText").addEventListener("click", copyPlainText);
 
 // Initial render
 renderNav();
 loadBundledDocs();
+setTheme(localStorage.getItem(THEME_KEY) || "light");
 </script>
 </body>
 </html>
