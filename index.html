@@ -440,6 +440,10 @@
     body.dark .panel-header {
       color: #fff;
     }
+    body.dark #libraryTitle,
+    body.dark #previewTitle {
+      color: #fff;
+    }
     body.dark .category > .cat-head,
     body.dark .preview {
       background: #171d26;
@@ -523,7 +527,7 @@
     <!-- LEFT: Upload + Category Nav -->
     <div class="panel left">
       <div class="panel-header">
-        <span>Library</span>
+        <span id="libraryTitle">Library</span>
         <span class="muted" id="libStatus">0 docs / 0 categories</span>
       </div>
 
@@ -652,6 +656,11 @@ const LS_KEY = "docLibrary.v1";
 const THEME_KEY = "docViewer.theme.v1";
 const LAYOUT_KEY = "docViewer.layout.v1";
 const DOC_TYPE_OPTIONS = ["template", "how-to", "checklist", "reference", "faq", "other"];
+const MAMMOTH_OPTIONS = {
+  includeDefaultStyleMap: true,
+  includeEmbeddedStyleMap: false,
+  ignoreEmptyParagraphs: false
+};
 const DOC_TYPE_PRIORITY = {
   template: 0,
   checklist: 1,
@@ -1111,7 +1120,7 @@ function renderSiteDocsNav(siteDocs) {
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    const useSubgroups = cat === "GYN-OB 1&2";
+    const useSubgroups = cat === "GYN";
 
     if (!useSubgroups) {
       for (const doc of items) {
@@ -1405,11 +1414,7 @@ async function loadDoc(docId) {
     const bytes = bytesFromBase64(d.docxBase64);
     const result = await mammoth.convertToHtml(
       { arrayBuffer: bytes.buffer },
-      {
-        includeDefaultStyleMap: true,
-        includeEmbeddedStyleMap: true,
-        ignoreEmptyParagraphs: false
-      }
+      MAMMOTH_OPTIONS
     );
 
     // Mammoth returns { value: "<p>...</p>", messages: [...] }
@@ -1464,11 +1469,7 @@ async function loadSiteDoc(doc) {
 
     const result = await mammoth.convertToHtml(
       { arrayBuffer: buffer },
-      {
-        includeDefaultStyleMap: true,
-        includeEmbeddedStyleMap: true,
-        ignoreEmptyParagraphs: false
-      }
+      MAMMOTH_OPTIONS
     );
     setPreviewHtml(renderOutputRichText(result.value || "") || '<div class="muted">No content.</div>');
   } catch (e) {
