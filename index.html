@@ -334,8 +334,7 @@
   margin: 10px 0;
 }
 
-.preview .subline,
-.preview p.subline { margin: 2px 0; }
+.preview .subline { margin: 2px 0; }
 .preview .subblock { margin-top: 8px; }
 
 .preview h1,
@@ -1196,29 +1195,12 @@ function renderOutputRichText(html) {
   const submissionLinePattern = /^\s*\(\[[A-Za-z0-9\-]+\]\)\s+/;
   for (const p of container.querySelectorAll("p")) {
     if (!submissionLinePattern.test(p.textContent || "")) continue;
-    p.classList.add("subline");
+
+    const line = document.createElement("div");
+    line.className = "subline";
+    while (p.firstChild) line.appendChild(p.firstChild);
+    p.replaceWith(line);
   }
-
-  const templateLinePattern = /^-\s+/;
-  const paragraphs = Array.from(container.querySelectorAll("p"));
-  let run = [];
-
-  const flushRun = () => {
-    if (run.length >= 3) {
-      for (const p of run) p.classList.add("subline");
-    }
-    run = [];
-  };
-
-  for (const p of paragraphs) {
-    const text = (p.textContent || "").trim();
-    if (templateLinePattern.test(text)) {
-      run.push(p);
-    } else {
-      flushRun();
-    }
-  }
-  flushRun();
 
   const templateLinePattern = /^[\-–•]\s+/;
   const paragraphs = Array.from(container.querySelectorAll("p"));
