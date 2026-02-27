@@ -911,6 +911,7 @@ let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
 let bundledCategoryCanonical = new Map([[normalizeCategory("Uncategorized"), "Uncategorized"]]);
 let leftSearchQuery = "";
+let openCategoryKey = null;
 let leftSearchDocTextCache = new Map();
 let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
@@ -1674,14 +1675,31 @@ function groupDocsBySubgroup(items) {
     }));
 }
 
-function toggleCategory(catEl, parentEl) {
+function toggleCategory(catEl, parentEl, categoryKey = null) {
   const isOpening = !catEl.classList.contains("open");
 
   for (const sibling of parentEl.querySelectorAll(".category.open")) {
     sibling.classList.remove("open");
   }
 
-  if (isOpening) catEl.classList.add("open");
+  if (isOpening) {
+    catEl.classList.add("open");
+    openCategoryKey = categoryKey || null;
+  } else {
+    openCategoryKey = null;
+  }
+}
+
+function getActiveCategoryKey() {
+  if (activeSiteDocPath) {
+    const doc = bundledDocs.find((d) => d.path === activeSiteDocPath);
+    return doc ? normalizeCategory(doc.category || "Uncategorized") : null;
+  }
+  if (activeDocId) {
+    const doc = state.docs.find((d) => d.id === activeDocId);
+    return doc ? normalizeCategory(doc.category || "Uncategorized") : null;
+  }
+  return null;
 }
 
 function bytesFromBase64(b64) {
@@ -1744,7 +1762,10 @@ function createBundledDocItem(doc) {
       <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
     </div>
   `;
-  item.addEventListener("click", () => loadSiteDoc(doc));
+  item.addEventListener("click", () => {
+    openCategoryKey = normalizeCategory(doc.category || "Uncategorized");
+    loadSiteDoc(doc);
+  });
   return item;
 }
 
@@ -1770,6 +1791,7 @@ function createUploadedDocItem(doc) {
       if (action === "rename") return renameDoc(doc.id);
       return;
     }
+    openCategoryKey = normalizeCategory(doc.category || "Uncategorized");
     await loadDoc(doc.id);
   });
 
@@ -1893,8 +1915,9 @@ function renderUnifiedNav() {
       <span class="cat-head-title">${escapeHtml(category.label)}</span>
       <span class="cat-count">${catDocs.length}</span>
     `;
-    head.addEventListener("click", () => toggleCategory(catEl, siteDocsNavEl));
-    if (leftSearchQuery) catEl.classList.add("open");
+    head.addEventListener("click", () => toggleCategory(catEl, siteDocsNavEl, category.key));
+    const shouldOpen = !!leftSearchQuery || category.key === openCategoryKey || category.key === getActiveCategoryKey();
+    if (shouldOpen) catEl.classList.add("open");
 
     const list = document.createElement("div");
     list.className = "doc-list";
