@@ -752,7 +752,7 @@
                 <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
                 <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
                   <input id="notesShowAll" type="checkbox" />
-                  <span>All notes</span>
+                  <span>Show Notes</span>
                 </label>
               </div>
               <div class="notes-list" id="notesList"></div>
@@ -1186,11 +1186,12 @@ function filteredNotesForView() {
 
 function renderNotesList() {
   if (!notesListEl) return;
+  const totalNotes = Array.isArray(notesOverlay.notes) ? notesOverlay.notes.length : 0;
   const items = filteredNotesForView()
     .slice()
     .sort((a, b) => (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
 
-  if (notesCountEl) notesCountEl.textContent = String(items.length);
+  if (notesCountEl) notesCountEl.textContent = String(totalNotes);
 
   if (!items.length) {
     notesListEl.innerHTML = '<div class="muted">No notes yet for this view.</div>';
@@ -1805,7 +1806,7 @@ function appendBundledSection(listEl, docs, showHeader) {
   if (showHeader) {
     const header = document.createElement("div");
     header.className = "source-head";
-    header.textContent = "Bundled";
+    header.textContent = "Internal";
     listEl.appendChild(header);
   }
 
