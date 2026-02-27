@@ -440,6 +440,10 @@
     body.dark .panel-header {
       color: #fff;
     }
+    body.dark #libraryTitle,
+    body.dark #previewTitle {
+      color: #fff;
+    }
     body.dark .category > .cat-head,
     body.dark .preview {
       background: #171d26;
@@ -523,7 +527,7 @@
     <!-- LEFT: Upload + Category Nav -->
     <div class="panel left">
       <div class="panel-header">
-        <span>Library</span>
+        <span id="libraryTitle">Library</span>
         <span class="muted" id="libStatus">0 docs / 0 categories</span>
       </div>
 
@@ -1111,7 +1115,7 @@ function renderSiteDocsNav(siteDocs) {
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    const useSubgroups = cat === "GYN-OB 1&2";
+    const useSubgroups = cat === "GYN";
 
     if (!useSubgroups) {
       for (const doc of items) {
