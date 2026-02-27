@@ -574,6 +574,7 @@ let activeDocId = null;
 let activeSiteDocPath = null;
 let searchMatches = [];
 let activeSearchIndex = -1;
+let topButtonHideTimer = null;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -901,12 +902,12 @@ function updateSearchMeta() {
 }
 
 function runPreviewSearch() {
-  refreshSearchHighlights();
+  refreshSearchHighlights(true);
 }
 
 function jumpToSearchMatch(next = true) {
   if (!searchMatches.length && previewSearchEl.value.trim()) {
-    refreshSearchHighlights();
+    refreshSearchHighlights(false);
   }
   if (!searchMatches.length) return;
 
@@ -923,7 +924,7 @@ function jumpToSearchMatch(next = true) {
   updateSearchMeta();
 }
 
-function refreshSearchHighlights() {
+function refreshSearchHighlights(autoFocusFirst = true) {
   const query = previewSearchEl.value.trim();
   clearSearchHighlights();
   if (!query) return;
@@ -974,7 +975,8 @@ function refreshSearchHighlights() {
 
   if (searchMatches.length) {
     activeSearchIndex = -1;
-    jumpToSearchMatch(true);
+    if (autoFocusFirst) jumpToSearchMatch(true);
+    else updateSearchMeta();
   } else {
     updateSearchMeta();
   }
@@ -1215,8 +1217,19 @@ async function copyPlainText() {
 }
 
 function updateToTopVisibility() {
-  const shouldShow = window.scrollY > 200 || previewEl.scrollTop > 200;
-  btnToTopEl.classList.toggle("hidden", !shouldShow);
+  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
+
+  if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
+
+  if (!isScrolling) {
+    btnToTopEl.classList.add("hidden");
+    return;
+  }
+
+  btnToTopEl.classList.remove("hidden");
+  topButtonHideTimer = setTimeout(() => {
+    btnToTopEl.classList.add("hidden");
+  }, 900);
 }
 
 function scrollToTop() {
@@ -1251,7 +1264,8 @@ previewSearchEl.addEventListener("input", refreshSearchHighlights);
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    jumpToSearchMatch(!e.shiftKey);
+    if (e.shiftKey) jumpToSearchMatch(false);
+    else runPreviewSearch();
   }
 });
 
