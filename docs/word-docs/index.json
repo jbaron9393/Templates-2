@@ -1,5 +1,8 @@
 {
-      "fileName": "gyn-template.docx",
-      "title": "GYN Template",
-      "category": "GYN"
+  "files": [
+    {
+      "fileName": "Mastectomy Grossing.docx",
+      "title": "Mastectomy",
+      "category": "Breast"
+    }  ]
 }
