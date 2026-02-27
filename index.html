@@ -213,8 +213,8 @@
     .subgroup {
       border: 1px solid #f0f0f0;
       border-radius: 8px;
-      padding: 8px;
       background: #fcfcfc;
+      overflow: hidden;
     }
     .subgroup + .subgroup {
       margin-top: 6px;
@@ -225,10 +225,31 @@
       letter-spacing: .03em;
       text-transform: uppercase;
       color: #555;
-      margin-bottom: 6px;
-      padding-bottom: 4px;
+      padding: 8px 10px;
       border-bottom: 1px solid #efefef;
       overflow-wrap: anywhere;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .subgroup-head::after {
+      content: "▸";
+      font-size: .72rem;
+      opacity: .85;
+      transition: transform .14s ease;
+    }
+    .subgroup.open .subgroup-head::after {
+      transform: rotate(90deg);
+    }
+    .subgroup-body {
+      display: none;
+      padding: 8px;
+    }
+    .subgroup.open .subgroup-body {
+      display: block;
     }
 
     .doc-actions { display:flex; gap:8px; }
@@ -576,7 +597,7 @@ const docCategoryEl = $("#docCategory");
 let state = loadLibrary();
 let activeDocId = null;
 let activeSiteDocPath = null;
-let searchMatches = [];
+let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let bundledStats = { docs: 0, categories: 0 };
@@ -661,6 +682,31 @@ function getSubgroupLabel(doc) {
   return parts[1];
 }
 
+function subgroupSortValue(name) {
+  const value = (name || "").trim();
+  if (!value || value.toLowerCase() === "general") return { rank: 1, text: "general", num: Number.POSITIVE_INFINITY };
+
+  const match = value.match(/^(.*?)(\d+)$/);
+  if (match) {
+    return {
+      rank: 0,
+      text: match[1].trim().toLowerCase(),
+      num: Number(match[2])
+    };
+  }
+
+  return { rank: 0, text: value.toLowerCase(), num: Number.POSITIVE_INFINITY };
+}
+
+function compareSubgroups(a, b) {
+  const av = subgroupSortValue(a);
+  const bv = subgroupSortValue(b);
+  if (av.rank !== bv.rank) return av.rank - bv.rank;
+  if (av.text !== bv.text) return av.text.localeCompare(bv.text, undefined, { numeric: true, sensitivity: "base" });
+  if (av.num !== bv.num) return av.num - bv.num;
+  return (a || "").localeCompare(b || "", undefined, { numeric: true, sensitivity: "base" });
+}
+
 function groupDocsBySubgroup(items) {
   const groups = new Map();
   for (const doc of items) {
@@ -669,10 +715,12 @@ function groupDocsBySubgroup(items) {
     groups.get(subgroup).push(doc);
   }
 
-  return [...groups.entries()].map(([name, docs]) => ({
-    name,
-    docs
-  }));
+  return [...groups.entries()]
+    .sort(([a], [b]) => compareSubgroups(a, b))
+    .map(([name, docs]) => ({
+      name,
+      docs: docs.slice().sort((x, y) => (x.title || "").localeCompare(y.title || "", undefined, { numeric: true, sensitivity: "base" }))
+    }));
 }
 
 function toggleCategory(catEl, parentEl) {
@@ -815,19 +863,10 @@ function renderSiteDocsNav(siteDocs) {
     const list = document.createElement("div");
     list.className = "doc-list";
 
-    const groupedItems = groupDocsBySubgroup(items);
-    for (const subgroup of groupedItems) {
-      const subgroupEl = document.createElement("div");
-      subgroupEl.className = "subgroup";
+    const useSubgroups = cat === "GYN-OB 1&2";
 
-      if (subgroup.name !== "General") {
-        const subgroupHead = document.createElement("div");
-        subgroupHead.className = "subgroup-head";
-        subgroupHead.textContent = subgroup.name;
-        subgroupEl.appendChild(subgroupHead);
-      }
-
-      for (const doc of subgroup.docs) {
+    if (!useSubgroups) {
+      for (const doc of items) {
         const item = document.createElement("div");
         item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
         item.innerHTML = `
@@ -837,10 +876,45 @@ function renderSiteDocsNav(siteDocs) {
           </div>
         `;
         item.addEventListener("click", () => loadSiteDoc(doc));
-        subgroupEl.appendChild(item);
+        list.appendChild(item);
       }
+    } else {
+      const groupedItems = groupDocsBySubgroup(items);
+      for (const subgroup of groupedItems) {
+        const subgroupEl = document.createElement("div");
+        const hasActiveDoc = subgroup.docs.some((doc) => doc.path === activeSiteDocPath);
+        subgroupEl.className = "subgroup" + (hasActiveDoc ? " open" : "");
 
-      list.appendChild(subgroupEl);
+        const subgroupHead = document.createElement("div");
+        subgroupHead.className = "subgroup-head";
+        subgroupHead.innerHTML = `
+          <span>${escapeHtml(subgroup.name)}</span>
+          <span class="cat-count">${subgroup.docs.length}</span>
+        `;
+        subgroupHead.addEventListener("click", () => {
+          subgroupEl.classList.toggle("open");
+        });
+        subgroupEl.appendChild(subgroupHead);
+
+        const subgroupBody = document.createElement("div");
+        subgroupBody.className = "subgroup-body";
+
+        for (const doc of subgroup.docs) {
+          const item = document.createElement("div");
+          item.className = "doc-item" + (doc.path === activeSiteDocPath ? " active" : "");
+          item.innerHTML = `
+            <div class="doc-meta">
+              <div class="doc-title">${escapeHtml(doc.title)}</div>
+              <div class="doc-sub">${escapeHtml(doc.fileName)}</div>
+            </div>
+          `;
+          item.addEventListener("click", () => loadSiteDoc(doc));
+          subgroupBody.appendChild(item);
+        }
+
+        subgroupEl.appendChild(subgroupBody);
+        list.appendChild(subgroupEl);
+      }
     }
 
     catEl.appendChild(head);
@@ -892,7 +966,7 @@ function clearSearchHighlights() {
   for (const mark of previewEl.querySelectorAll("mark.search-hit")) {
     mark.replaceWith(document.createTextNode(mark.textContent || ""));
   }
-  searchMatches = [];
+  searchMatchGroups = [];
   activeSearchIndex = -1;
   updateSearchMeta();
 }
@@ -902,11 +976,11 @@ function updateSearchMeta() {
     searchMetaEl.textContent = "";
     return;
   }
-  if (!searchMatches.length) {
+  if (!searchMatchGroups.length) {
     searchMetaEl.textContent = "0 matches";
     return;
   }
-  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatches.length}`;
+  searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatchGroups.length}`;
 }
 
 function runPreviewSearch() {
@@ -914,21 +988,23 @@ function runPreviewSearch() {
 }
 
 function jumpToSearchMatch(next = true) {
-  if (!searchMatches.length && previewSearchEl.value.trim()) {
+  if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
     refreshSearchHighlights(false);
   }
-  if (!searchMatches.length) return;
+  if (!searchMatchGroups.length) return;
 
-  searchMatches.forEach((el) => el.classList.remove("active"));
+  searchMatchGroups.forEach((group) => {
+    group.marks.forEach((mark) => mark.classList.remove("active"));
+  });
   if (next) {
-    activeSearchIndex = (activeSearchIndex + 1) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex + 1) % searchMatchGroups.length;
   } else {
-    activeSearchIndex = (activeSearchIndex - 1 + searchMatches.length) % searchMatches.length;
+    activeSearchIndex = (activeSearchIndex - 1 + searchMatchGroups.length) % searchMatchGroups.length;
   }
 
-  const target = searchMatches[activeSearchIndex];
-  target.classList.add("active");
-  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  const group = searchMatchGroups[activeSearchIndex];
+  group.marks.forEach((mark) => mark.classList.add("active"));
+  group.marks[0].scrollIntoView({ behavior: "smooth", block: "center" });
   updateSearchMeta();
 }
 
@@ -953,35 +1029,59 @@ function refreshSearchHighlights(autoFocusFirst = true) {
   let node;
   while ((node = walker.nextNode())) textNodes.push(node);
 
+  const nodeRanges = [];
+  let fullText = "";
   for (const textNode of textNodes) {
-    const text = textNode.nodeValue;
-    regex.lastIndex = 0;
-    if (!regex.test(text)) continue;
+    const text = textNode.nodeValue || "";
+    const start = fullText.length;
+    fullText += text;
+    nodeRanges.push({ textNode, start, end: fullText.length });
+  }
 
-    const fragment = document.createDocumentFragment();
-    let lastIndex = 0;
-    regex.lastIndex = 0;
-    let match;
+  const matches = [];
+  regex.lastIndex = 0;
+  let match;
+  while ((match = regex.exec(fullText)) !== null) {
+    matches.push({ start: match.index, end: match.index + match[0].length });
+  }
 
-    while ((match = regex.exec(text)) !== null) {
-      const [matched] = match;
-      const start = match.index;
-      if (start > lastIndex) fragment.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+  let matchId = 0;
+  for (const currentMatch of matches) {
+    const group = { id: matchId++, marks: [] };
+    const touchedRanges = nodeRanges.filter((range) => range.end > currentMatch.start && range.start < currentMatch.end);
+
+    for (const range of touchedRanges) {
+      const nodeText = range.textNode.nodeValue || "";
+      const localStart = Math.max(0, currentMatch.start - range.start);
+      const localEnd = Math.min(nodeText.length, currentMatch.end - range.start);
+      if (localStart >= localEnd) continue;
+
+      const fragment = document.createDocumentFragment();
+      if (localStart > 0) fragment.appendChild(document.createTextNode(nodeText.slice(0, localStart)));
 
       const mark = document.createElement("mark");
       mark.className = "search-hit";
-      mark.textContent = matched;
+      mark.dataset.matchId = String(group.id);
+      mark.textContent = nodeText.slice(localStart, localEnd);
       fragment.appendChild(mark);
-      searchMatches.push(mark);
+      group.marks.push(mark);
 
-      lastIndex = start + matched.length;
+      if (localEnd < nodeText.length) fragment.appendChild(document.createTextNode(nodeText.slice(localEnd)));
+      range.textNode.replaceWith(fragment);
+
+      const tailNode = mark.nextSibling;
+      range.textNode = tailNode && tailNode.nodeType === Node.TEXT_NODE
+        ? tailNode
+        : document.createTextNode("");
+      if (!tailNode || tailNode.nodeType !== Node.TEXT_NODE) {
+        mark.after(range.textNode);
+      }
     }
 
-    if (lastIndex < text.length) fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
-    textNode.replaceWith(fragment);
+    if (group.marks.length) searchMatchGroups.push(group);
   }
 
-  if (searchMatches.length) {
+  if (searchMatchGroups.length) {
     activeSearchIndex = -1;
     if (autoFocusFirst) jumpToSearchMatch(true);
     else updateSearchMeta();
@@ -1272,12 +1372,12 @@ $("#btnSearchClear").addEventListener("click", () => {
   previewSearchEl.value = "";
   clearSearchHighlights();
 });
-previewSearchEl.addEventListener("input", refreshSearchHighlights);
+previewSearchEl.addEventListener("input", () => refreshSearchHighlights(false));
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
     if (e.shiftKey) jumpToSearchMatch(false);
-    else runPreviewSearch();
+    else jumpToSearchMatch(true);
   }
 });
 
