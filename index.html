@@ -38,7 +38,7 @@
 
     .main {
       display: flex;
-      gap: 16px;
+      gap: 10px;
       padding: 16px;
       max-width: 1700px;
       margin: 0 auto;
@@ -56,12 +56,27 @@
     }
 
     .left {
-      flex: 0 0 360px;
-      min-width: 320px;
+      flex: 0 0 var(--left-panel-width, 360px);
+      min-width: 280px;
     }
     .right {
-      flex: 1;
-      min-width: 520px;
+      flex: 1 1 0;
+      min-width: 420px;
+    }
+
+    .panel-resizer {
+      flex: 0 0 10px;
+      cursor: col-resize;
+      border-radius: 999px;
+      background: linear-gradient(180deg, rgba(207,184,124,.18), rgba(207,184,124,.35));
+      border: 1px solid rgba(207,184,124,.5);
+      align-self: stretch;
+      user-select: none;
+      touch-action: none;
+    }
+    .panel-resizer:hover,
+    .panel-resizer.dragging {
+      background: linear-gradient(180deg, rgba(207,184,124,.35), rgba(207,184,124,.6));
     }
 
     .panel-header {
@@ -455,6 +470,10 @@
     body.dark .icon-btn:hover {
       background: #323d4d;
     }
+    body.dark .panel-resizer {
+      background: linear-gradient(180deg, rgba(207,184,124,.22), rgba(207,184,124,.4));
+      border-color: rgba(207,184,124,.6);
+    }
   </style>
 </head>
 
@@ -538,6 +557,8 @@
       </div>
     </div>
 
+    <div class="panel-resizer" id="panelResizer" role="separator" aria-label="Resize panels" aria-orientation="vertical"></div>
+
     <!-- RIGHT: Preview -->
     <div class="panel right">
       <div class="panel-header">
@@ -587,9 +608,12 @@
 
 const LS_KEY = "docLibrary.v1";
 const THEME_KEY = "docViewer.theme.v1";
+const LAYOUT_KEY = "docViewer.layout.v1";
 
 const $ = (sel) => document.querySelector(sel);
 const navEl = $("#nav");
+const mainEl = $(".main");
+const panelResizerEl = $("#panelResizer");
 const siteDocsNavEl = $("#siteDocsNav");
 const errEl = $("#err");
 const libStatusEl = $("#libStatus");
@@ -1482,6 +1506,66 @@ function scrollToTop() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function applyLeftPanelWidth(widthPx) {
+  const minLeft = 280;
+  const minRight = 420;
+  const mainWidth = mainEl?.clientWidth || window.innerWidth;
+  const maxLeft = Math.max(minLeft, mainWidth - minRight - 30);
+  const clamped = Math.min(maxLeft, Math.max(minLeft, Math.round(widthPx)));
+  document.documentElement.style.setProperty("--left-panel-width", `${clamped}px`);
+  localStorage.setItem(LAYOUT_KEY, JSON.stringify({ leftPanelWidth: clamped }));
+}
+
+function initPanelResizer() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(LAYOUT_KEY) || "{}");
+    if (typeof saved.leftPanelWidth === "number") applyLeftPanelWidth(saved.leftPanelWidth);
+  } catch {}
+
+  let dragging = false;
+
+  const onMove = (clientX) => {
+    if (!dragging) return;
+    const rect = mainEl.getBoundingClientRect();
+    const leftWidth = clientX - rect.left - 5;
+    applyLeftPanelWidth(leftWidth);
+  };
+
+  const stopDragging = () => {
+    if (!dragging) return;
+    dragging = false;
+    panelResizerEl.classList.remove("dragging");
+  };
+
+  panelResizerEl.addEventListener("mousedown", (e) => {
+    dragging = true;
+    panelResizerEl.classList.add("dragging");
+    e.preventDefault();
+  });
+
+  window.addEventListener("mousemove", (e) => onMove(e.clientX));
+  window.addEventListener("mouseup", stopDragging);
+
+  panelResizerEl.addEventListener("touchstart", (e) => {
+    dragging = true;
+    panelResizerEl.classList.add("dragging");
+    e.preventDefault();
+  }, { passive: false });
+
+  window.addEventListener("touchmove", (e) => {
+    if (!dragging || !e.touches?.[0]) return;
+    onMove(e.touches[0].clientX);
+  }, { passive: true });
+
+  window.addEventListener("touchend", stopDragging);
+  window.addEventListener("touchcancel", stopDragging);
+
+  window.addEventListener("resize", () => {
+    const current = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--left-panel-width"), 10);
+    if (!Number.isNaN(current)) applyLeftPanelWidth(current);
+  });
+}
+
 // -------------------- Wire up events --------------------
 $("#btnAdd").addEventListener("click", addDocFromUpload);
 $("#btnTheme").addEventListener("click", toggleTheme);
@@ -1534,6 +1618,7 @@ setTheme(localStorage.getItem(THEME_KEY) || "light");
 updateToTopVisibility();
 updateFloatingSearchClear();
 updateLeftSearchMeta();
+initPanelResizer();
 </script>
 </body>
 </html>
