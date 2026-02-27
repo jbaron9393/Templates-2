@@ -18,6 +18,9 @@
       color: #222;
       line-height: 1.5;
       transition: background .2s ease, color .2s ease;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
     .header {
       background: linear-gradient(135deg, #000 0%, #1a1a1a 100%);
@@ -43,6 +46,7 @@
       max-width: 1700px;
       margin: 0 auto;
       min-height: calc(100vh - 88px);
+      width: 100%;
     }
 
     .panel {
@@ -314,8 +318,12 @@
 
 .search-hit {
   background: #fff09b;
-  color: #222;
-  padding: 0 1px;
+  color: inherit;
+  padding: 0;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  font-weight: inherit;
 }
 
 .search-hit.active {
@@ -326,7 +334,8 @@
   margin: 10px 0;
 }
 
-.preview .subline { margin: 2px 0; }
+.preview .subline,
+.preview p.subline { margin: 2px 0; }
 .preview .subblock { margin-top: 8px; }
 
 .preview h1,
@@ -368,6 +377,16 @@
     .preview img { max-width: 100%; height: auto; }
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
+    .site-footer {
+      margin-top: auto;
+      width: 100%;
+      max-width: 1700px;
+      margin-left: auto;
+      margin-right: auto;
+      padding: 6px 20px 16px;
+      color: #777;
+      font-size: .8rem;
+    }
 
 
     .to-top-btn {
@@ -419,6 +438,9 @@
     body.dark .doc-item {
       border-color: #303947;
     }
+    body.dark .panel-header {
+      color: #fff;
+    }
     body.dark .category > .cat-head,
     body.dark .preview {
       background: #171d26;
@@ -450,6 +472,7 @@
     body.dark .cat-count,
     body.dark label,
     body.dark .footer-note,
+    body.dark .site-footer,
     body.dark .header small {
       color: #b5becc;
     }
@@ -604,11 +627,12 @@
         </div>
       </div>
 
-      <div class="footer-note" id="selectionNote">
-        Grossing Manual — University of Colorado Department of Pathology<br />
-        Last updated February 2026
-      </div>
     </div>
+  </div>
+
+  <div class="site-footer" id="selectionNote">
+    Grossing Manual — University of Colorado Department of Pathology<br />
+    Last updated February 2026
   </div>
 
   <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
@@ -1172,12 +1196,29 @@ function renderOutputRichText(html) {
   const submissionLinePattern = /^\s*\(\[[A-Za-z0-9\-]+\]\)\s+/;
   for (const p of container.querySelectorAll("p")) {
     if (!submissionLinePattern.test(p.textContent || "")) continue;
-
-    const line = document.createElement("div");
-    line.className = "subline";
-    while (p.firstChild) line.appendChild(p.firstChild);
-    p.replaceWith(line);
+    p.classList.add("subline");
   }
+
+  const templateLinePattern = /^-\s+/;
+  const paragraphs = Array.from(container.querySelectorAll("p"));
+  let run = [];
+
+  const flushRun = () => {
+    if (run.length >= 3) {
+      for (const p of run) p.classList.add("subline");
+    }
+    run = [];
+  };
+
+  for (const p of paragraphs) {
+    const text = (p.textContent || "").trim();
+    if (templateLinePattern.test(text)) {
+      run.push(p);
+    } else {
+      flushRun();
+    }
+  }
+  flushRun();
 
   return container.innerHTML;
 }
