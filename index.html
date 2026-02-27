@@ -781,7 +781,6 @@
       </div>
       <textarea id="noteText" placeholder="Write your note..."></textarea>
       <div class="modal-row">
-        <label style="display:flex;align-items:center;gap:6px;font-weight:600;"><input type="checkbox" id="notePinned" />Pinned</label>
         <label for="noteAnchorType" style="font-weight:600;">Attach to:</label>
         <select id="noteAnchorType" style="max-width:260px;">
           <option value="selection">Current selection</option>
@@ -860,7 +859,6 @@ const docTypeEl = $("#docType");
 const noteModalBackdropEl = $("#noteModalBackdrop");
 const noteModalTitleEl = $("#noteModalTitle");
 const noteTextEl = $("#noteText");
-const notePinnedEl = $("#notePinned");
 const noteAnchorTypeEl = $("#noteAnchorType");
 
 let state = loadLibrary();
@@ -1150,7 +1148,7 @@ function renderNotesList() {
   if (!notesListEl) return;
   const items = filteredNotesForView()
     .slice()
-    .sort((a, b) => (Number(b.pinned) - Number(a.pinned)) || (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
+    .sort((a, b) => (new Date(b.updatedAtISO) - new Date(a.updatedAtISO)));
 
   if (notesCountEl) notesCountEl.textContent = String(items.length);
 
@@ -1165,10 +1163,10 @@ function renderNotesList() {
     row.className = 'note-item';
     const timestamp = new Date(note.updatedAtISO || note.createdAtISO || Date.now()).toLocaleString();
     row.innerHTML = `
-      <div class="note-item-head"><span>${note.pinned ? '📌 Pinned' : 'Note'}</span><span>${escapeHtml(timestamp)}</span></div>
+      <div class="note-item-head"><span>Note</span><span>${escapeHtml(timestamp)}</span></div>
       <div class="note-preview">${escapeHtml((note.text || '').split('\n')[0] || '(empty note)')}</div>
       <div class="note-actions">
-        <button class="btn secondary compact" data-action="jump">Jump</button>
+        <button class="btn secondary compact" data-action="pin">Pin</button>
         <button class="btn secondary compact" data-action="edit">Edit</button>
         <button class="btn secondary compact" data-action="delete">Delete</button>
       </div>
@@ -1178,7 +1176,7 @@ function renderNotesList() {
       const btn = e.target.closest('button');
       if (!btn) return;
       const action = btn.dataset.action;
-      if (action === 'jump') return jumpToNote(note);
+      if (action === 'pin') return pinToNote(note);
       if (action === 'edit') return openNoteModal({ mode: 'edit', note });
       if (action === 'delete') return deleteNote(note.id);
     });
@@ -1197,7 +1195,6 @@ function openNoteModal({ mode = 'create', note = null, suggestedAnchorType = 'se
   noteEditorState = { mode, noteId: note?.id || null, suggestedAnchorType };
   noteModalTitleEl.textContent = mode === 'edit' ? 'Edit Note' : 'New Note';
   noteTextEl.value = note?.text || '';
-  notePinnedEl.checked = !!note?.pinned;
   noteAnchorTypeEl.value = note?.anchor?.type === 'heading' ? 'heading' : (note?.anchor?.type === 'scroll' ? 'scroll' : suggestedAnchorType || 'selection');
   noteModalBackdropEl.classList.add('open');
   noteTextEl.focus();
@@ -1232,7 +1229,6 @@ function saveNoteFromModal() {
     const found = notesOverlay.notes.find((n) => n.id === noteEditorState.noteId);
     if (found) {
       found.text = text;
-      found.pinned = !!notePinnedEl.checked;
       found.anchor = anchor;
       found.docKey = ctx.docKey;
       found.docTitle = ctx.docTitle;
@@ -1246,7 +1242,6 @@ function saveNoteFromModal() {
       anchor,
       text,
       tags: [],
-      pinned: !!notePinnedEl.checked,
       createdAtISO: stamp,
       updatedAtISO: stamp
     });
@@ -1304,7 +1299,7 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
 }
 
 function jumpToNote(note) {
-  if (!note) return;
+  if (!note) return false;
   let target = null;
   const anchor = note.anchor || {};
 
@@ -1320,11 +1315,56 @@ function jumpToNote(note) {
   if (target) {
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     highlightAnchorElement(target);
-    return;
+    return true;
   }
 
   if (typeof anchor.scrollTop === 'number') {
     previewEl.scrollTo({ top: anchor.scrollTop, behavior: 'smooth' });
+    return true;
+  }
+
+  return false;
+}
+
+async function openDocumentForNote(note) {
+  const docKey = (note?.docKey || '').toString();
+  if (!docKey) return false;
+
+  if (docKey.startsWith('local:')) {
+    const id = docKey.slice('local:'.length);
+    const doc = state.docs.find((d) => d.id === id);
+    if (!doc) return false;
+    await loadDoc(id);
+    return true;
+  }
+
+  if (docKey.startsWith('site:')) {
+    const path = docKey.slice('site:'.length);
+    const doc = bundledDocs.find((d) => d.path === path);
+    if (!doc) return false;
+    await loadSiteDoc(doc);
+    return true;
+  }
+
+  return false;
+}
+
+async function pinToNote(note) {
+  if (!note) return;
+  const opened = await openDocumentForNote(note);
+  if (!opened) {
+    alert('Could not find the source document for this note.');
+    return;
+  }
+
+  if (previewContentType !== 'docx') {
+    alert('Pin highlight is available for DOCX previews only.');
+    return;
+  }
+
+  const jumped = jumpToNote(note);
+  if (!jumped) {
+    alert('Pinned location could not be found exactly, but the document is open.');
   }
 }
 
@@ -2245,7 +2285,6 @@ function importLibraryFromFile(file) {
           },
           text: (note.text || '').toString(),
           tags: Array.isArray(note.tags) ? note.tags : [],
-          pinned: !!note.pinned,
           createdAtISO: note.createdAtISO || nowISO(),
           updatedAtISO: note.updatedAtISO || nowISO()
         });
