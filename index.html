@@ -1984,13 +1984,21 @@ function renderOutputRichText(html) {
   }
 
   const templateLinePattern = /^[\-–•]\s+/;
+  const fieldLinePattern = /^[A-Za-z][^\n]{0,120}:\s+/;
   const paragraphs = Array.from(container.querySelectorAll("p"));
   const compactRuns = [];
+  const fieldRuns = [];
   let run = [];
+  let fieldRun = [];
 
   const flushRun = () => {
     if (run.length >= 3) compactRuns.push(...run);
     run = [];
+  };
+
+  const flushFieldRun = () => {
+    if (fieldRun.length >= 4) fieldRuns.push(...fieldRun);
+    fieldRun = [];
   };
 
   for (const p of paragraphs) {
@@ -2000,10 +2008,24 @@ function renderOutputRichText(html) {
     } else {
       flushRun();
     }
+
+    if (fieldLinePattern.test(text)) {
+      fieldRun.push(p);
+    } else {
+      flushFieldRun();
+    }
   }
   flushRun();
+  flushFieldRun();
 
   for (const p of compactRuns) {
+    const line = document.createElement("div");
+    line.className = "subline";
+    while (p.firstChild) line.appendChild(p.firstChild);
+    p.replaceWith(line);
+  }
+
+  for (const p of fieldRuns) {
     const line = document.createElement("div");
     line.className = "subline";
     while (p.firstChild) line.appendChild(p.firstChild);
