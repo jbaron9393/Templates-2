@@ -362,7 +362,7 @@
     }
     .subgroup-body {
       display: none;
-      padding: 8px;
+      padding: 10px;
     }
     .subgroup.open .subgroup-body {
       display: block;
@@ -550,42 +550,46 @@
       position: fixed;
       top: 50%;
       right: 24px;
-      bottom: 68px;
+      bottom: auto;
       z-index: 51;
-      width: min(190px, calc(100vw - 32px));
+      width: min(280px, calc(100vw - 32px));
       background: rgba(255,255,255,.96);
       border: 1px solid rgba(207,184,124,.9);
       border-radius: 12px;
       box-shadow: 0 10px 24px rgba(0,0,0,.16);
-      padding: 8px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
+      font-size: .95rem;
       backdrop-filter: blur(10px);
+      transform: translateY(-50%);
     }
     .floating-search-panel.hidden {
       display: none;
     }
     .floating-search-panel-row {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
+      width: 100%;
     }
     .floating-search-actions {
       display: flex;
-      gap: 4px;
+      gap: 6px;
       flex-wrap: wrap;
+      width: 100%;
     }
     .floating-search-actions .btn.compact {
-      padding: 4px 7px;
-      font-size: .74rem;
+      padding: 6px 10px;
+      font-size: .82rem;
     }
     .floating-search-panel .muted {
-      font-size: .76rem;
+      font-size: .85rem;
     }
     .floating-search-panel-row input {
-      min-width: 0;
-      flex: 1;
+      width: 100%;
+      flex: 1 1 auto;
     }
     .note-category-chip {
       font-size: .72rem;
@@ -704,7 +708,7 @@
         bottom: 112px;
         right: 16px;
         transform: none;
-        width: min(360px, calc(100vw - 32px));
+        width: min(280px, calc(100vw - 32px));
       }
     }
     body.dark .note-category-chip {
@@ -1334,6 +1338,7 @@ let notesOverlay = loadNotesOverlay();
 let activeDocId = null;
 let activeSiteDocPath = null;
 let searchMatchGroups = [];
+
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let floatingSearchTransientVisible = false;
@@ -2586,52 +2591,50 @@ function updateSearchMeta() {
   updateFloatingSearchMeta();
 }
 
-function jumpToClosestSearchMatch() {
+function jumpToNearestSearchMatch() {
   if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
     refreshSearchHighlights(false);
   }
   if (!searchMatchGroups.length) return;
-  activateSearchMatch(findClosestSearchMatchIndex());
+  activateSearchMatch(findNearestSearchMatchIndex());
 }
 
 function runPreviewSearch() {
   floatingSearchPinnedOpen = true;
   refreshSearchHighlights(false);
-  jumpToClosestSearchMatch();
+  jumpToNearestSearchMatch();
   updateFloatingSearchVisibility();
 }
 
-function getSearchViewportCenterY() {
-  return previewEl.scrollTop + (previewEl.clientHeight / 2);
-}
-
-function getMarkCenterOffset(mark) {
+function getMarkTopOffset(mark) {
   if (!mark) return Number.POSITIVE_INFINITY;
   const previewRect = previewEl.getBoundingClientRect();
   const markRect = mark.getBoundingClientRect();
-  const relativeTop = (markRect.top - previewRect.top) + previewEl.scrollTop;
-  return relativeTop + (markRect.height / 2);
+  return (markRect.top - previewRect.top) + previewEl.scrollTop;
 }
 
-function findClosestSearchMatchIndex() {
+function findNearestSearchMatchIndex() {
   if (!searchMatchGroups.length) return -1;
 
-  const viewportCenterY = getSearchViewportCenterY();
-  let bestIndex = 0;
-  let bestDistance = Number.POSITIVE_INFINITY;
+  const viewportTop = previewEl.scrollTop;
+  let fallbackIndex = 0;
+  let fallbackDistance = Number.POSITIVE_INFINITY;
 
-  searchMatchGroups.forEach((group, index) => {
+  for (const [index, group] of searchMatchGroups.entries()) {
     const mark = group.marks?.[0];
-    if (!mark) return;
-    const markCenterY = getMarkCenterOffset(mark);
-    const distance = Math.abs(markCenterY - viewportCenterY);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
-    }
-  });
+    if (!mark) continue;
 
-  return bestIndex;
+    const markTop = getMarkTopOffset(mark);
+    if (markTop >= viewportTop) return index;
+
+    const distance = viewportTop - markTop;
+    if (distance < fallbackDistance) {
+      fallbackDistance = distance;
+      fallbackIndex = index;
+    }
+  }
+
+  return fallbackIndex;
 }
 
 function activateSearchMatch(index, { scrollBehavior = "smooth" } = {}) {
@@ -2655,7 +2658,7 @@ function jumpToSearchMatch(next = true) {
   if (!searchMatchGroups.length) return;
 
   if (activeSearchIndex === -1) {
-    activateSearchMatch(findClosestSearchMatchIndex());
+    activateSearchMatch(findNearestSearchMatchIndex());
     return;
   }
 
@@ -2741,7 +2744,7 @@ function refreshSearchHighlights(autoFocusFirst = true) {
 
   if (searchMatchGroups.length) {
     activeSearchIndex = -1;
-    if (autoFocusFirst) activateSearchMatch(findClosestSearchMatchIndex());
+    if (autoFocusFirst) activateSearchMatch(findNearestSearchMatchIndex());
     else updateSearchMeta();
   } else {
     updateSearchMeta();
