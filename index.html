@@ -2478,7 +2478,7 @@ function updateFloatingSearchMeta() {
 function updateFloatingSearchVisibility() {
   const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
-  const showLauncher = isScrolling || floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused || hasQuery;
+  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused || hasQuery;
   const showPanel = floatingSearchPinnedOpen || (showLauncher && (hasQuery || panelFocused));
 
   btnSearchFloatEl.classList.remove("hidden");
@@ -3033,20 +3033,17 @@ function openCreateNoteFromSelection() {
   openNoteModal({ mode: 'create', capturedAnchor });
 }
 
-function updateToTopVisibility() {
-  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
+function hideFloatingScrollButtons() {
+  btnToTopEl.classList.add("hidden");
+  floatingSearchTransientVisible = false;
+  if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within") && !previewSearchEl.value.trim()) {
+    updateFloatingSearchVisibility();
+  }
+}
 
+function updateToTopVisibility() {
   if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
   updateFloatingSearchVisibility();
-
-  if (!isScrolling) {
-    btnToTopEl.classList.add("hidden");
-    floatingSearchTransientVisible = false;
-    if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within") && !previewSearchEl.value.trim()) {
-      updateFloatingSearchVisibility();
-    }
-    return;
-  }
 
   btnToTopEl.classList.remove("hidden");
   floatingSearchTransientVisible = true;
@@ -3269,7 +3266,7 @@ renderUnifiedNav();
 setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
-updateToTopVisibility();
+hideFloatingScrollButtons();
 clearPageHash();
 syncFloatingSearchInput();
 updateFloatingSearchMeta();
