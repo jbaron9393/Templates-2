@@ -2476,10 +2476,9 @@ function updateFloatingSearchMeta() {
 }
 
 function updateFloatingSearchVisibility() {
-  const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
-  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused || hasQuery;
-  const showPanel = floatingSearchPinnedOpen || panelFocused || hasQuery;
+  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused;
+  const showPanel = floatingSearchPinnedOpen || panelFocused;
 
   btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
@@ -3064,7 +3063,7 @@ function openCreateNoteFromSelection() {
 function hideFloatingScrollButtons() {
   btnToTopEl.classList.add("hidden");
   floatingSearchTransientVisible = false;
-  if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within") && !previewSearchEl.value.trim()) {
+  if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within")) {
     updateFloatingSearchVisibility();
   }
 }
@@ -3078,7 +3077,7 @@ function updateToTopVisibility() {
   updateFloatingSearchVisibility();
 
   topButtonHideTimer = setTimeout(() => {
-    btnToTopEl.classList.add("hidden");
+    hideFloatingScrollButtons();
   }, 900);
 }
 
