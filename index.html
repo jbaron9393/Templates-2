@@ -2165,7 +2165,22 @@ function getCachedUploadedBytes(doc) {
 }
 
 function nextPaint() {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => setTimeout(finish, 0));
+      setTimeout(finish, 32);
+      return;
+    }
+
+    setTimeout(finish, 0);
+  });
 }
 
 async function renderDocxToHtmlWithCache(doc, loadBuffer) {
