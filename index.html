@@ -1360,6 +1360,8 @@ const MAMMOTH_SCRIPT_SOURCES = [
   "https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
 ];
+const MAMMOTH_SCRIPT_TIMEOUT_MS = 5000;
+const DOC_LOAD_TIMEOUT_MS = 12000;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -1455,14 +1457,26 @@ function loadScriptOnce(src) {
     }
 
     const script = document.createElement("script");
+    let settled = false;
+    const finish = (handler) => (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      handler(value);
+    };
+    const timeoutId = window.setTimeout(() => {
+      script.remove();
+      finish(reject)(new Error(`Timed out loading ${src}`));
+    }, MAMMOTH_SCRIPT_TIMEOUT_MS);
+
     script.src = src;
     script.async = true;
     script.dataset.src = src;
-    script.onload = () => {
+    script.onload = finish(() => {
       script.dataset.loaded = "true";
       resolve();
-    };
-    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    });
+    script.onerror = finish(() => reject(new Error(`Failed to load ${src}`)));
     document.head.appendChild(script);
   });
 }
@@ -2063,6 +2077,7 @@ function loadArrayBufferViaXhr(path) {
     const xhr = new XMLHttpRequest();
     xhr.open("GET", path, true);
     xhr.responseType = "arraybuffer";
+    xhr.timeout = DOC_LOAD_TIMEOUT_MS;
 
     xhr.onload = () => {
       const status = xhr.status || 200;
@@ -2075,6 +2090,7 @@ function loadArrayBufferViaXhr(path) {
 
     xhr.onerror = () => reject(new Error("Network error while loading file."));
     xhr.onabort = () => reject(new Error("File load was aborted."));
+    xhr.ontimeout = () => reject(new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`));
 
     try {
       xhr.send();
@@ -2086,13 +2102,24 @@ function loadArrayBufferViaXhr(path) {
 
 async function loadArrayBufferFromPath(path) {
   let fetchError = null;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), DOC_LOAD_TIMEOUT_MS)
+    : null;
 
   try {
-    const response = await fetch(path, { cache: "no-store" });
+    const response = await fetch(path, {
+      cache: "no-store",
+      ...(controller ? { signal: controller.signal } : {})
+    });
     if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
     return await response.arrayBuffer();
   } catch (error) {
-    fetchError = error;
+    fetchError = error?.name === "AbortError"
+      ? new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`)
+      : error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
   }
 
   try {
