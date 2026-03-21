@@ -1293,7 +1293,6 @@ let activeSiteDocPath = null;
 let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
-let floatingSearchHideTimer = null;
 let floatingSearchPinnedOpen = false;
 let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
@@ -2479,9 +2478,9 @@ function updateFloatingSearchMeta() {
 function updateFloatingSearchVisibility() {
   const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
-  const showPanel = floatingSearchPinnedOpen || (isScrolling && (hasQuery || panelFocused));
+  const showPanel = floatingSearchPinnedOpen || hasQuery || panelFocused;
 
-  btnSearchFloatEl.classList.toggle("hidden", !isScrolling);
+  btnSearchFloatEl.classList.remove("hidden");
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
   floatingSearchPanelEl.setAttribute("aria-hidden", showPanel ? "false" : "true");
 }
@@ -3037,25 +3036,16 @@ function updateToTopVisibility() {
   const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
 
   if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
-  if (floatingSearchHideTimer) clearTimeout(floatingSearchHideTimer);
   updateFloatingSearchVisibility();
 
   if (!isScrolling) {
     btnToTopEl.classList.add("hidden");
-    floatingSearchPinnedOpen = false;
-    updateFloatingSearchVisibility();
     return;
   }
 
   btnToTopEl.classList.remove("hidden");
-  btnSearchFloatEl.classList.remove("hidden");
   topButtonHideTimer = setTimeout(() => {
     btnToTopEl.classList.add("hidden");
-  }, 900);
-  floatingSearchHideTimer = setTimeout(() => {
-    if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within") && !previewSearchEl.value.trim()) {
-      btnSearchFloatEl.classList.add("hidden");
-    }
   }, 900);
 }
 
@@ -3160,16 +3150,9 @@ previewEl.addEventListener("mouseup", updateAddNoteButtonState);
 previewEl.addEventListener("keyup", updateAddNoteButtonState);
 previewEl.addEventListener("click", (e) => {
   const anchor = e.target.closest("a[href]");
-  if (anchor && previewEl.contains(anchor)) {
-    if (!handlePreviewAnchorNavigation(anchor)) return;
-    e.preventDefault();
-    return;
-  }
-
-  if (!floatingSearchPanelEl.classList.contains("hidden")) {
-    floatingSearchPinnedOpen = false;
-    updateFloatingSearchVisibility();
-  }
+  if (!anchor || !previewEl.contains(anchor)) return;
+  if (!handlePreviewAnchorNavigation(anchor)) return;
+  e.preventDefault();
 });
 leftSearchEl.addEventListener("input", () => {
   leftSearchQuery = normalizeSearchValue(leftSearchEl.value);
@@ -3245,24 +3228,6 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
       updateFloatingSearchVisibility();
     }
   }
-});
-
-document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
-    e.preventDefault();
-    floatingSearchPinnedOpen = true;
-    updateFloatingSearchVisibility();
-    syncFloatingSearchInput();
-    floatingPreviewSearchEl.focus();
-    floatingPreviewSearchEl.select();
-  }
-});
-
-document.addEventListener("click", (e) => {
-  if (floatingSearchPanelEl.classList.contains("hidden")) return;
-  if (floatingSearchPanelEl.contains(e.target) || btnSearchFloatEl.contains(e.target)) return;
-  floatingSearchPinnedOpen = false;
-  updateFloatingSearchVisibility();
 });
 
 // Initial render
