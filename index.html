@@ -546,11 +546,9 @@
       padding: 7px 11px;
       font-size: .82rem;
     }
-    .hidden-search-shell {
-      display: none;
-    }
     .floating-search-panel {
       position: fixed;
+      top: 50%;
       right: 24px;
       bottom: 68px;
       z-index: 51;
@@ -683,6 +681,24 @@
     body.dark .floating-search-panel {
       background: rgba(27,33,42,.96);
       border-color: rgba(207,184,124,.82);
+    }
+    @media (max-width: 900px) {
+      .search-float {
+        top: auto;
+        bottom: 112px;
+        right: 24px;
+        transform: none;
+        writing-mode: horizontal-tb;
+        border-radius: 999px;
+        padding: 7px 11px;
+      }
+      .floating-search-panel {
+        top: auto;
+        bottom: 112px;
+        right: 16px;
+        transform: none;
+        width: min(360px, calc(100vw - 32px));
+      }
     }
     body.dark .note-category-chip {
       background: #3a3528;
