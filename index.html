@@ -552,14 +552,13 @@
       right: 24px;
       bottom: auto;
       z-index: 51;
-      width: fit-content;
-      max-width: calc(100vw - 32px);
+      width: min(280px, calc(100vw - 32px));
       background: rgba(255,255,255,.96);
       border: 1px solid rgba(207,184,124,.9);
       border-radius: 12px;
       box-shadow: 0 10px 24px rgba(0,0,0,.16);
       padding: 10px;
-      display: inline-flex;
+      display: flex;
       flex-direction: column;
       gap: 6px;
       font-size: .95rem;
@@ -573,15 +572,13 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      width: fit-content;
-      max-width: 100%;
+      width: 100%;
     }
     .floating-search-actions {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      width: fit-content;
-      max-width: 100%;
+      width: 100%;
     }
     .floating-search-actions .btn.compact {
       padding: 6px 10px;
@@ -591,9 +588,8 @@
       font-size: .85rem;
     }
     .floating-search-panel-row input {
-      min-width: 14ch;
-      width: clamp(14ch, var(--floating-search-input-width, 28ch), calc(100vw - 64px));
-      flex: 0 1 auto;
+      width: 100%;
+      flex: 1 1 auto;
     }
     .note-category-chip {
       font-size: .72rem;
@@ -712,8 +708,7 @@
         bottom: 112px;
         right: 16px;
         transform: none;
-        width: fit-content;
-        max-width: calc(100vw - 32px);
+        width: min(280px, calc(100vw - 32px));
       }
     }
     body.dark .note-category-chip {
@@ -1344,12 +1339,6 @@ let activeDocId = null;
 let activeSiteDocPath = null;
 let searchMatchGroups = [];
 
-function syncFloatingSearchInputWidth(value) {
-  if (!floatingPreviewSearchEl) return;
-  const basis = (value || floatingPreviewSearchEl.placeholder || "").trim();
-  const width = Math.min(Math.max(basis.length + 2, 14), 32);
-  floatingPreviewSearchEl.style.setProperty("--floating-search-input-width", `${width}ch`);
-}
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let floatingSearchTransientVisible = false;
