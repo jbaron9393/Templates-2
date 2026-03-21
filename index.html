@@ -538,6 +538,9 @@
       padding: 7px 11px;
       font-size: .82rem;
     }
+    .hidden-search-shell {
+      display: none;
+    }
     .floating-search-panel {
       position: fixed;
       right: 24px;
@@ -830,7 +833,7 @@
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
-        <div class="preview-search">
+        <div class="preview-search hidden-search-shell" aria-hidden="true">
           <input id="previewSearch" type="text" placeholder="Search within preview..." />
           <button class="btn secondary compact" id="btnSearchFind">Search (Enter)</button>
           <button class="btn secondary compact" id="btnSearchClear">Clear</button>
@@ -1303,7 +1306,6 @@ let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
 let previewContentType = "docx";
 let activePreviewObjectUrl = null;
-let floatingSearchPinnedOpen = false;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -2415,6 +2417,33 @@ function setPreviewHtml(html, { objectUrl = null } = {}) {
   updateAddNoteButtonState();
 }
 
+function clearPageHash() {
+  if (!window.location.hash) return;
+  history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+}
+
+function findPreviewAnchorTarget(hash) {
+  const anchorId = (hash || "").replace(/^#/, "").trim();
+  if (!anchorId) return null;
+
+  const safeId = window.CSS?.escape
+    ? CSS.escape(anchorId)
+    : anchorId.replace(/[^a-zA-Z0-9_-]/g, (char) => `\\${char}`);
+  return previewEl.querySelector(`#${safeId}, a[name="${safeId}"]`);
+}
+
+function handlePreviewAnchorNavigation(anchor) {
+  const href = anchor?.getAttribute("href") || "";
+  if (!href.startsWith("#")) return false;
+
+  const target = findPreviewAnchorTarget(href);
+  clearPageHash();
+  if (!target) return true;
+
+  target.scrollIntoView({ behavior: "smooth", block: "start" });
+  return true;
+}
+
 function renderBundledFileFallback(doc, reason = "") {
   const message = reason
     ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(reason)}</div>`
@@ -2449,11 +2478,10 @@ function updateFloatingSearchMeta() {
 }
 
 function updateFloatingSearchVisibility() {
-  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
   const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
-  const showPanel = isScrolling && (floatingSearchPinnedOpen || hasQuery || panelFocused);
-  const showLauncher = isScrolling && (floatingSearchTransientVisible || showPanel);
+  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused || hasQuery;
+  const showPanel = floatingSearchPinnedOpen || (showLauncher && (hasQuery || panelFocused));
 
   btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
@@ -2490,8 +2518,15 @@ function runPreviewSearch() {
 }
 
 function getSearchViewportCenterY() {
+  return previewEl.scrollTop + (previewEl.clientHeight / 2);
+}
+
+function getMarkCenterOffset(mark) {
+  if (!mark) return Number.POSITIVE_INFINITY;
   const previewRect = previewEl.getBoundingClientRect();
-  return previewRect.top + (previewRect.height / 2);
+  const markRect = mark.getBoundingClientRect();
+  const relativeTop = (markRect.top - previewRect.top) + previewEl.scrollTop;
+  return relativeTop + (markRect.height / 2);
 }
 
 function findClosestSearchMatchIndex() {
@@ -2504,8 +2539,7 @@ function findClosestSearchMatchIndex() {
   searchMatchGroups.forEach((group, index) => {
     const mark = group.marks?.[0];
     if (!mark) return;
-    const rect = mark.getBoundingClientRect();
-    const markCenterY = rect.top + (rect.height / 2);
+    const markCenterY = getMarkCenterOffset(mark);
     const distance = Math.abs(markCenterY - viewportCenterY);
     if (distance < bestDistance) {
       bestDistance = distance;
@@ -3001,23 +3035,22 @@ function openCreateNoteFromSelection() {
   openNoteModal({ mode: 'create', capturedAnchor });
 }
 
-function updateToTopVisibility() {
-  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
+function hideFloatingScrollButtons() {
+  btnToTopEl.classList.add("hidden");
+  floatingSearchTransientVisible = false;
+  if (!floatingSearchPinnedOpen && !floatingSearchPanelEl.matches(":focus-within") && !previewSearchEl.value.trim()) {
+    updateFloatingSearchVisibility();
+  }
+}
 
+function updateToTopVisibility() {
   if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
   if (floatingSearchHideTimer) clearTimeout(floatingSearchHideTimer);
 
-  if (!isScrolling) {
-    floatingSearchTransientVisible = false;
-    updateFloatingSearchVisibility();
-    btnToTopEl.classList.add("hidden");
-    return;
-  }
-
+  btnToTopEl.classList.remove("hidden");
   floatingSearchTransientVisible = true;
   updateFloatingSearchVisibility();
 
-  btnToTopEl.classList.remove("hidden");
   topButtonHideTimer = setTimeout(() => {
     btnToTopEl.classList.add("hidden");
   }, 900);
@@ -3126,6 +3159,19 @@ document.addEventListener("selectionchange", () => {
 });
 previewEl.addEventListener("mouseup", updateAddNoteButtonState);
 previewEl.addEventListener("keyup", updateAddNoteButtonState);
+previewEl.addEventListener("click", (e) => {
+  const anchor = e.target.closest("a[href]");
+  if (anchor && previewEl.contains(anchor)) {
+    if (!handlePreviewAnchorNavigation(anchor)) return;
+    e.preventDefault();
+    return;
+  }
+
+  if (!floatingSearchPanelEl.classList.contains("hidden")) {
+    floatingSearchPinnedOpen = false;
+    updateFloatingSearchVisibility();
+  }
+});
 leftSearchEl.addEventListener("input", () => {
   leftSearchQuery = normalizeSearchValue(leftSearchEl.value);
   if (leftSearchQuery) queueLeftSearchIndexAll();
@@ -3202,12 +3248,32 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
   }
 });
 
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    floatingSearchTransientVisible = true;
+    floatingSearchPinnedOpen = true;
+    updateFloatingSearchVisibility();
+    syncFloatingSearchInput();
+    floatingPreviewSearchEl.focus();
+    floatingPreviewSearchEl.select();
+  }
+});
+
+document.addEventListener("click", (e) => {
+  if (floatingSearchPanelEl.classList.contains("hidden")) return;
+  if (floatingSearchPanelEl.contains(e.target) || btnSearchFloatEl.contains(e.target)) return;
+  floatingSearchPinnedOpen = false;
+  updateFloatingSearchVisibility();
+});
+
 // Initial render
 renderUnifiedNav();
 setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
-updateToTopVisibility();
+hideFloatingScrollButtons();
+clearPageHash();
 syncFloatingSearchInput();
 updateFloatingSearchMeta();
 updateFloatingSearchVisibility();
