@@ -548,7 +548,6 @@
     }
     .floating-search-panel {
       position: fixed;
-      top: 50%;
       right: 24px;
       bottom: 68px;
       z-index: 51;
@@ -1335,6 +1334,7 @@ let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
 let bundledCategoryCanonical = new Map([[normalizeCategory("Uncategorized"), "Uncategorized"]]);
 let leftSearchQuery = "";
+let lastSearchQuery = "";
 let openCategoryKey = null;
 let leftSearchDocTextCache = new Map();
 let leftSearchIndexing = new Set();
@@ -2556,6 +2556,7 @@ function toggleFloatingSearch() {
 }
 
 function clearPreviewSearch() {
+  lastSearchQuery = "";
   previewSearchEl.value = "";
   syncFloatingSearchInput();
   clearSearchHighlights();
@@ -2587,10 +2588,32 @@ function jumpToClosestSearchMatch() {
   activateSearchMatch(findClosestSearchMatchIndex());
 }
 
-function runPreviewSearch() {
+function runPreviewSearch({ forceRestart = false } = {}) {
   floatingSearchPinnedOpen = true;
-  refreshSearchHighlights(false);
-  jumpToClosestSearchMatch();
+  const query = previewSearchEl.value.trim();
+  const queryChanged = lastSearchQuery !== query;
+
+  if (!query) {
+    clearSearchHighlights();
+    updateFloatingSearchVisibility();
+    return;
+  }
+
+  if (queryChanged) {
+    refreshSearchHighlights(false);
+  }
+
+  if (!searchMatchGroups.length) {
+    updateFloatingSearchVisibility();
+    return;
+  }
+
+  if (forceRestart || queryChanged || activeSearchIndex === -1) {
+    activateSearchMatch(0);
+  } else {
+    jumpToSearchMatch(true);
+  }
+
   updateFloatingSearchVisibility();
 }
 
@@ -2661,6 +2684,7 @@ function jumpToSearchMatch(next = true) {
 function refreshSearchHighlights(autoFocusFirst = true) {
   syncFloatingSearchInput();
   const query = previewSearchEl.value.trim();
+  lastSearchQuery = query;
   clearSearchHighlights();
   if (!query) return;
 
@@ -3252,13 +3276,13 @@ btnSearchFloatEl.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleFloatingSearch();
 });
-$("#btnSearchFind").addEventListener("click", runPreviewSearch);
+$("#btnSearchFind").addEventListener("click", () => runPreviewSearch({ forceRestart: true }));
 btnSearchPrevEl.addEventListener("click", () => jumpToSearchMatch(false));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
 btnFloatingSearchFindEl.addEventListener("click", () => {
   previewSearchEl.value = floatingPreviewSearchEl.value;
   floatingSearchPinnedOpen = true;
-  runPreviewSearch();
+  runPreviewSearch({ forceRestart: true });
 });
 btnFloatingSearchPrevEl.addEventListener("click", () => {
   const nextQuery = floatingPreviewSearchEl.value;
