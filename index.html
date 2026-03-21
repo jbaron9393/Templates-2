@@ -6,6 +6,9 @@
   <title>Grossing Manual</title>
   <link rel="icon" type="image/svg+xml" href="./blood-drop.svg" />
 
+  <!-- Mammoth (DOCX -> HTML in browser) -->
+  <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+
   <style>
     /* --- Lightweight "cap_synoptic_generator.html"-ish layout: header + 2 panels --- */
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -359,7 +362,7 @@
     }
     .subgroup-body {
       display: none;
-      padding: 10px;
+      padding: 8px;
     }
     .subgroup.open .subgroup-body {
       display: block;
@@ -547,20 +550,18 @@
       position: fixed;
       top: 50%;
       right: 24px;
-      bottom: auto;
+      bottom: 68px;
       z-index: 51;
       width: min(280px, calc(100vw - 32px));
       background: rgba(255,255,255,.96);
       border: 1px solid rgba(207,184,124,.9);
-      border-radius: 12px;
-      box-shadow: 0 10px 24px rgba(0,0,0,.16);
+      border-radius: 14px;
+      box-shadow: 0 14px 32px rgba(0,0,0,.18);
       padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      font-size: .95rem;
       backdrop-filter: blur(10px);
-      transform: translateY(-50%);
     }
     .floating-search-panel.hidden {
       display: none;
@@ -569,24 +570,15 @@
       display: flex;
       gap: 8px;
       align-items: center;
-      width: 100%;
     }
     .floating-search-actions {
       display: flex;
       gap: 6px;
       flex-wrap: wrap;
-      width: 100%;
-    }
-    .floating-search-actions .btn.compact {
-      padding: 6px 10px;
-      font-size: .82rem;
-    }
-    .floating-search-panel .muted {
-      font-size: .85rem;
     }
     .floating-search-panel-row input {
-      width: 100%;
-      flex: 1 1 auto;
+      min-width: 0;
+      flex: 1;
     }
     .note-category-chip {
       font-size: .72rem;
@@ -705,7 +697,7 @@
         bottom: 112px;
         right: 16px;
         transform: none;
-        width: min(280px, calc(100vw - 32px));
+        width: min(360px, calc(100vw - 32px));
       }
     }
     body.dark .note-category-chip {
@@ -1300,7 +1292,6 @@ const notesCategoryEl = $("#notesCategory");
 const notesHeadEl = $("#notesHead");
 const notesCountEl = $("#notesCount");
 
-const rightPanelEl = $(".panel.right");
 const previewEl = $("#preview");
 const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
@@ -1336,7 +1327,6 @@ let notesOverlay = loadNotesOverlay();
 let activeDocId = null;
 let activeSiteDocPath = null;
 let searchMatchGroups = [];
-
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
 let floatingSearchTransientVisible = false;
@@ -1351,22 +1341,6 @@ let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
 let previewContentType = "docx";
 let activePreviewObjectUrl = null;
-let activePreviewLoadToken = 0;
-let docRenderCache = new Map();
-let docRenderInFlight = new Map();
-let uploadedFileBytesCache = new Map();
-let mammothLoadPromise = null;
-const DOC_LOAD_TIMEOUT_MS = 12000;
-const DOC_RENDER_TIMEOUT_MS = 20000;
-const MAMMOTH_SCRIPT_TIMEOUT_MS = 10000;
-const MAMMOTH_SCRIPT_SOURCES = [
-  "./vendor/mammoth.browser.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js",
-  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js",
-  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/browser/mammoth.browser.min.js",
-  "https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js",
-  "https://unpkg.com/mammoth@1.6.0/browser/mammoth.browser.min.js"
-];
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -1449,112 +1423,6 @@ function inferMimeTypeFromFileName(fileName) {
   if (ext === ".png") return "image/png";
   if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   return "application/octet-stream";
-}
-
-function resolveBundledAssetPath(path) {
-  const cleanPath = (path || "").toString().trim();
-  if (!cleanPath) return "";
-  if (/^(?:[a-z]+:)?\/\//i.test(cleanPath) || cleanPath.startsWith("data:")) return cleanPath;
-  return cleanPath
-    .split("/")
-    .map((segment, index) => {
-      if (index === 0 && /^[.]{1,2}$/.test(segment)) return segment;
-      try {
-        return encodeURIComponent(decodeURIComponent(segment));
-      } catch {
-        return encodeURIComponent(segment);
-      }
-    })
-    .join("/");
-}
-
-function withTimeout(promiseFactory, timeoutMs, label) {
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const timeoutId = window.setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
-    }, timeoutMs);
-
-    Promise.resolve()
-      .then(promiseFactory)
-      .then((value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        resolve(value);
-      })
-      .catch((error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeoutId);
-        reject(error);
-      });
-  });
-}
-
-function loadScriptOnce(src) {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[data-src="${src}"]`);
-    if (existing) {
-      existing.addEventListener("load", resolve, { once: true });
-      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
-      if (existing.dataset.loaded === "true") resolve();
-      return;
-    }
-
-    const script = document.createElement("script");
-    let settled = false;
-    const finish = (handler) => (value) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeoutId);
-      handler(value);
-    };
-    const timeoutId = window.setTimeout(() => {
-      script.remove();
-      finish(reject)(new Error(`Timed out loading ${src}`));
-    }, MAMMOTH_SCRIPT_TIMEOUT_MS);
-
-    script.src = src;
-    script.async = true;
-    script.dataset.src = src;
-    script.onload = finish(() => {
-      script.dataset.loaded = "true";
-      resolve();
-    });
-    script.onerror = finish(() => reject(new Error(`Failed to load ${src}`)));
-    document.head.appendChild(script);
-  });
-}
-
-async function ensureMammothLoaded() {
-  if (window.mammoth) return window.mammoth;
-  if (mammothLoadPromise) return mammothLoadPromise;
-
-  mammothLoadPromise = (async () => {
-    const errors = [];
-
-    for (const src of MAMMOTH_SCRIPT_SOURCES) {
-      try {
-        await loadScriptOnce(src);
-        if (window.mammoth) return window.mammoth;
-        errors.push(`Loaded ${src} but Mammoth was unavailable.`);
-      } catch (error) {
-        errors.push(error?.message || String(error));
-      }
-    }
-
-    throw new Error(`Unable to load the DOCX rendering library. ${errors.join(" ")}`);
-  })();
-
-  try {
-    return await mammothLoadPromise;
-  } catch (error) {
-    mammothLoadPromise = null;
-    throw error;
-  }
 }
 
 function normalizeLibraryDoc(doc) {
@@ -2112,70 +1980,10 @@ function getLeftSearchDocKey(doc) {
 
 async function extractRawSearchTextFromArrayBuffer(arrayBuffer) {
   try {
-    const mammothApi = await ensureMammothLoaded();
-    const result = await withTimeout(() => mammothApi.extractRawText({ arrayBuffer }), DOC_RENDER_TIMEOUT_MS, "Document text extraction");
+    const result = await mammoth.extractRawText({ arrayBuffer });
     return normalizeSearchValue(result?.value || "");
   } catch {
     return "";
-  }
-}
-
-function loadArrayBufferViaXhr(path) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", path, true);
-    xhr.responseType = "arraybuffer";
-    xhr.timeout = DOC_LOAD_TIMEOUT_MS;
-
-    xhr.onload = () => {
-      const status = xhr.status || 200;
-      if (status >= 200 && status < 300) {
-        resolve(xhr.response);
-        return;
-      }
-      reject(new Error(`Failed to load file (${status})`));
-    };
-
-    xhr.onerror = () => reject(new Error("Network error while loading file."));
-    xhr.onabort = () => reject(new Error("File load was aborted."));
-    xhr.ontimeout = () => reject(new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`));
-
-    try {
-      xhr.send();
-    } catch (error) {
-      reject(error);
-    }
-  });
-}
-
-async function loadArrayBufferFromPath(path) {
-  let fetchError = null;
-  const controller = typeof AbortController === "function" ? new AbortController() : null;
-  const timeoutId = controller
-    ? window.setTimeout(() => controller.abort(), DOC_LOAD_TIMEOUT_MS)
-    : null;
-
-  try {
-    const response = await fetch(path, {
-      cache: "no-store",
-      ...(controller ? { signal: controller.signal } : {})
-    });
-    if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
-    return await response.arrayBuffer();
-  } catch (error) {
-    fetchError = error?.name === "AbortError"
-      ? new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`)
-      : error;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-
-  try {
-    return await loadArrayBufferViaXhr(path);
-  } catch (xhrError) {
-    const fetchMessage = fetchError?.message || String(fetchError);
-    const xhrMessage = xhrError?.message || String(xhrError);
-    throw new Error(`${fetchMessage}; XHR fallback failed: ${xhrMessage}`);
   }
 }
 
@@ -2187,8 +1995,11 @@ async function queueLeftSearchIndexDoc(doc) {
   try {
     let extracted = "";
     if (doc?.path && getFileExtension(doc.fileName) === ".docx") {
-      const buffer = await loadArrayBufferFromPath(resolveBundledAssetPath(doc.path));
-      extracted = await extractRawSearchTextFromArrayBuffer(buffer);
+      const response = await fetch(doc.path);
+      if (response.ok) {
+        const buffer = await response.arrayBuffer();
+        extracted = await extractRawSearchTextFromArrayBuffer(buffer);
+      }
     } else if (getFileExtension(doc?.fileName) === ".docx" && (doc?.fileBase64 || doc?.docxBase64)) {
       const bytes = bytesFromBase64(doc.fileBase64 || doc.docxBase64);
       extracted = await extractRawSearchTextFromArrayBuffer(bytes.buffer);
@@ -2322,77 +2133,6 @@ function bytesFromBase64(b64) {
   const bytes = new Uint8Array(len);
   for (let i=0;i<len;i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
-}
-
-function getRenderCacheKey(doc) {
-  if (doc?.path) return `site:${doc.path}`;
-  if (doc?.id) return `local:${doc.id}`;
-  return `doc:${doc?.fileName || "unknown"}`;
-}
-
-function getCachedUploadedBytes(doc) {
-  const key = getRenderCacheKey(doc);
-  if (!uploadedFileBytesCache.has(key)) {
-    uploadedFileBytesCache.set(key, bytesFromBase64(doc.fileBase64 || doc.docxBase64 || ""));
-  }
-  return uploadedFileBytesCache.get(key);
-}
-
-function nextPaint() {
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => setTimeout(finish, 0));
-      setTimeout(finish, 32);
-      return;
-    }
-
-    setTimeout(finish, 0);
-  });
-}
-
-async function renderDocxToHtmlWithCache(doc, loadBuffer) {
-  const key = getRenderCacheKey(doc);
-  if (docRenderCache.has(key)) return docRenderCache.get(key);
-  if (docRenderInFlight.has(key)) return docRenderInFlight.get(key);
-
-  const renderPromise = (async () => {
-    const buffer = await loadBuffer();
-    if (!buffer?.byteLength) throw new Error('Document appears to be empty.');
-
-    const mammothApi = await ensureMammothLoaded();
-
-    await nextPaint();
-
-    const result = await withTimeout(
-      () => mammothApi.convertToHtml(
-        { arrayBuffer: buffer },
-        MAMMOTH_OPTIONS
-      ),
-      DOC_RENDER_TIMEOUT_MS,
-      "Document rendering"
-    );
-
-    const rendered = {
-      html: renderOutputRichText(result.value || "") || '<div class="muted">No content.</div>',
-      messages: result.messages || []
-    };
-    docRenderCache.set(key, rendered);
-    return rendered;
-  })();
-
-  docRenderInFlight.set(key, renderPromise);
-  try {
-    return await renderPromise;
-  } finally {
-    docRenderInFlight.delete(key);
-  }
 }
 
 function base64FromArrayBuffer(buf) {
@@ -2712,20 +2452,6 @@ function setPreviewHtml(html, { objectUrl = null } = {}) {
   updateAddNoteButtonState();
 }
 
-function beginPreviewLoad() {
-  activePreviewLoadToken += 1;
-  return activePreviewLoadToken;
-}
-
-function isPreviewLoadCurrent(token) {
-  return token === activePreviewLoadToken;
-}
-
-function revealPreviewPanel() {
-  if (!rightPanelEl || window.innerWidth > 1200) return;
-  rightPanelEl.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
-}
-
 function clearPageHash() {
   if (!window.location.hash) return;
   history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
@@ -2757,12 +2483,11 @@ function renderBundledFileFallback(doc, reason = "") {
   const message = reason
     ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(reason)}</div>`
     : "";
-  const resolvedPath = resolveBundledAssetPath(doc?.path);
 
   setPreviewHtml(`
     ${message}
     <div class="muted" style="margin-bottom:8px;">This bundled file could not be rendered in-browser.</div>
-    <a class="btn secondary compact" href="${resolvedPath}" target="_blank" rel="noopener">Open / download file</a>
+    <a class="btn secondary compact" href="${doc.path}" target="_blank" rel="noopener">Open / download file</a>
   `);
 }
 
@@ -2785,7 +2510,6 @@ function syncFloatingSearchInput() {
 function updateFloatingSearchMeta() {
   if (!floatingSearchMetaEl) return;
   floatingSearchMetaEl.textContent = searchMetaEl.textContent || "Type to highlight matches.";
-  syncFloatingSearchInputWidth(previewSearchEl.value);
 }
 
 function hasActivePreviewDocument() {
@@ -2855,55 +2579,52 @@ function updateSearchMeta() {
   updateFloatingSearchMeta();
 }
 
-function jumpToNearestSearchMatch() {
+function jumpToClosestSearchMatch() {
   if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
     refreshSearchHighlights(false);
   }
   if (!searchMatchGroups.length) return;
-  activateSearchMatch(findNearestSearchMatchIndex());
+  activateSearchMatch(findClosestSearchMatchIndex());
 }
 
 function runPreviewSearch() {
   floatingSearchPinnedOpen = true;
-  if (previewSearchEl.value.trim() && searchMatchGroups.length && activeSearchIndex !== -1) {
-    jumpToSearchMatch(true);
-    updateFloatingSearchVisibility();
-    return;
-  }
   refreshSearchHighlights(false);
-  jumpToNearestSearchMatch();
+  jumpToClosestSearchMatch();
   updateFloatingSearchVisibility();
 }
 
-function getMarkTopOffset(mark) {
+function getSearchViewportCenterY() {
+  return previewEl.scrollTop + (previewEl.clientHeight / 2);
+}
+
+function getMarkCenterOffset(mark) {
   if (!mark) return Number.POSITIVE_INFINITY;
   const previewRect = previewEl.getBoundingClientRect();
   const markRect = mark.getBoundingClientRect();
-  return (markRect.top - previewRect.top) + previewEl.scrollTop;
+  const relativeTop = (markRect.top - previewRect.top) + previewEl.scrollTop;
+  return relativeTop + (markRect.height / 2);
 }
 
-function findNearestSearchMatchIndex() {
+function findClosestSearchMatchIndex() {
   if (!searchMatchGroups.length) return -1;
 
-  const viewportTop = previewEl.scrollTop;
-  let fallbackIndex = 0;
-  let fallbackDistance = Number.POSITIVE_INFINITY;
+  const viewportCenterY = getSearchViewportCenterY();
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
 
-  for (const [index, group] of searchMatchGroups.entries()) {
+  searchMatchGroups.forEach((group, index) => {
     const mark = group.marks?.[0];
-    if (!mark) continue;
-
-    const markTop = getMarkTopOffset(mark);
-    if (markTop >= viewportTop) return index;
-
-    const distance = viewportTop - markTop;
-    if (distance < fallbackDistance) {
-      fallbackDistance = distance;
-      fallbackIndex = index;
+    if (!mark) return;
+    const markCenterY = getMarkCenterOffset(mark);
+    const distance = Math.abs(markCenterY - viewportCenterY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
     }
-  }
+  });
 
-  return fallbackIndex;
+  return bestIndex;
 }
 
 function activateSearchMatch(index, { scrollBehavior = "smooth" } = {}) {
@@ -2927,7 +2648,7 @@ function jumpToSearchMatch(next = true) {
   if (!searchMatchGroups.length) return;
 
   if (activeSearchIndex === -1) {
-    activateSearchMatch(findNearestSearchMatchIndex());
+    activateSearchMatch(findClosestSearchMatchIndex());
     return;
   }
 
@@ -3013,7 +2734,7 @@ function refreshSearchHighlights(autoFocusFirst = true) {
 
   if (searchMatchGroups.length) {
     activeSearchIndex = -1;
-    if (autoFocusFirst) activateSearchMatch(findNearestSearchMatchIndex());
+    if (autoFocusFirst) activateSearchMatch(findClosestSearchMatchIndex());
     else updateSearchMeta();
   } else {
     updateSearchMeta();
@@ -3024,7 +2745,6 @@ function refreshSearchHighlights(autoFocusFirst = true) {
 async function loadDoc(docId) {
   const d = state.docs.find(x => x.id === docId);
   if (!d) return;
-  const loadToken = beginPreviewLoad();
 
   activeDocId = docId;
   activeSiteDocPath = null;
@@ -3037,56 +2757,51 @@ async function loadDoc(docId) {
   previewMetaEl.textContent = `${d.category || "Uncategorized"} • added ${new Date(d.addedAtISO).toLocaleString()}`;
 
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
-  revealPreviewPanel();
 
-  const bytes = getCachedUploadedBytes(d);
+  const bytes = bytesFromBase64(d.fileBase64 || d.docxBase64 || "");
   if (!bytes.byteLength) {
-    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<div class="danger">This uploaded file appears empty.</div>`);
     return;
   }
 
   if (ext === ".pdf") {
     const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || "application/pdf" }));
-    if (!isPreviewLoadCurrent(loadToken)) {
-      URL.revokeObjectURL(fileUrl);
-      return;
-    }
     setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${fileUrl}" title="${escapeHtml(d.title)}"></iframe></div>`, { objectUrl: fileUrl });
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
     const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
-    if (!isPreviewLoadCurrent(loadToken)) {
-      URL.revokeObjectURL(fileUrl);
-      return;
-    }
     setPreviewHtml(`<img src="${fileUrl}" alt="${escapeHtml(d.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`, { objectUrl: fileUrl });
     return;
   }
 
   try {
-    const rendered = await renderDocxToHtmlWithCache(d, async () => bytes.buffer);
-    if (!isPreviewLoadCurrent(loadToken)) return;
-    const msgHtml = rendered.messages.length
+    const result = await mammoth.convertToHtml(
+      { arrayBuffer: bytes.buffer },
+      MAMMOTH_OPTIONS
+    );
+
+    // Mammoth returns { value: "<p>...</p>", messages: [...] }
+    const html = renderOutputRichText(result.value || "");
+    const messages = result.messages || [];
+
+    const msgHtml = messages.length
       ? `<details style="margin-top:10px;">
-          <summary class="muted">Conversion notes (${rendered.messages.length})</summary>
+          <summary class="muted">Conversion notes (${messages.length})</summary>
           <ul style="margin:8px 0 0 18px;">
-            ${rendered.messages.map(m => `<li class="muted">${escapeHtml(m.message || JSON.stringify(m))}</li>`).join("")}
+            ${messages.map(m => `<li class="muted">${escapeHtml(m.message || JSON.stringify(m))}</li>`).join("")}
           </ul>
         </details>`
       : "";
 
-    setPreviewHtml(rendered.html + msgHtml);
+    setPreviewHtml(html + msgHtml);
   } catch (e) {
-    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<div class="danger">Failed to render file: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
 async function loadSiteDoc(doc) {
-  const loadToken = beginPreviewLoad();
   activeDocId = null;
   activeSiteDocPath = doc.path;
   previewContentType = getFileExtension(doc.fileName) === ".docx" ? "docx" : "binary";
@@ -3096,32 +2811,35 @@ async function loadSiteDoc(doc) {
   previewTitleEl.textContent = doc.title;
   previewMetaEl.textContent = `Library • ${doc.fileName}`;
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
-  revealPreviewPanel();
 
   const ext = getFileExtension(doc.fileName);
 
   if (ext === ".pdf") {
-    const resolvedPath = resolveBundledAssetPath(doc.path);
-    if (!isPreviewLoadCurrent(loadToken)) return;
-    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${resolvedPath}" title="${escapeHtml(doc.title)}"></iframe></div>`);
+    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${doc.path}" title="${escapeHtml(doc.title)}"></iframe></div>`);
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
-    const resolvedPath = resolveBundledAssetPath(doc.path);
-    if (!isPreviewLoadCurrent(loadToken)) return;
-    setPreviewHtml(`<img src="${resolvedPath}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
+    setPreviewHtml(`<img src="${doc.path}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
     return;
   }
 
   try {
-    const rendered = await renderDocxToHtmlWithCache(doc, async () => {
-      return loadArrayBufferFromPath(resolveBundledAssetPath(doc.path));
-    });
-    if (!isPreviewLoadCurrent(loadToken)) return;
-    setPreviewHtml(rendered.html);
+    const response = await fetch(doc.path);
+    if (!response.ok) throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
+
+    const buffer = await response.arrayBuffer();
+    if (!buffer.byteLength) {
+      renderBundledFileFallback(doc, `"${doc.title}" appears to be empty.`);
+      return;
+    }
+
+    const result = await mammoth.convertToHtml(
+      { arrayBuffer: buffer },
+      MAMMOTH_OPTIONS
+    );
+    setPreviewHtml(renderOutputRichText(result.value || "") || '<div class="muted">No content.</div>');
   } catch (e) {
-    if (!isPreviewLoadCurrent(loadToken)) return;
     renderBundledFileFallback(doc, `Failed to render bundled DOCX: ${e?.message || String(e)}`);
   }
 }
@@ -3563,7 +3281,6 @@ previewSearchEl.addEventListener("input", () => {
 });
 floatingPreviewSearchEl.addEventListener("input", () => {
   floatingSearchPinnedOpen = true;
-  syncFloatingSearchInputWidth(floatingPreviewSearchEl.value);
   previewSearchEl.value = floatingPreviewSearchEl.value;
   refreshSearchHighlights(false);
   updateFloatingSearchVisibility();
@@ -3583,7 +3300,7 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
     e.preventDefault();
     floatingSearchPinnedOpen = true;
     previewSearchEl.value = floatingPreviewSearchEl.value;
-    jumpToSearchMatch(true);
+    runPreviewSearch();
     updateFloatingSearchVisibility();
   }
   if (e.key === "Escape") {
@@ -3614,9 +3331,6 @@ document.addEventListener("click", (e) => {
 renderUnifiedNav();
 setLibraryStatus();
 loadBundledDocs();
-ensureMammothLoaded().catch((error) => {
-  console.warn("DOCX renderer failed to load.", error);
-});
 setTheme(localStorage.getItem(THEME_KEY) || "light");
 hideFloatingScrollButtons();
 clearPageHash();
