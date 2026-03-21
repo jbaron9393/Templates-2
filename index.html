@@ -1354,6 +1354,16 @@ let docRenderCache = new Map();
 let docRenderInFlight = new Map();
 let uploadedFileBytesCache = new Map();
 const DOC_LOAD_TIMEOUT_MS = 12000;
+const DOC_RENDER_TIMEOUT_MS = 20000;
+const MAMMOTH_SCRIPT_TIMEOUT_MS = 10000;
+const MAMMOTH_SCRIPT_SOURCES = [
+  "./vendor/mammoth.browser.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js",
+  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js",
+  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/browser/mammoth.browser.min.js",
+  "https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js",
+  "https://unpkg.com/mammoth@1.6.0/browser/mammoth.browser.min.js"
+];
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -1436,6 +1446,49 @@ function inferMimeTypeFromFileName(fileName) {
   if (ext === ".png") return "image/png";
   if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   return "application/octet-stream";
+}
+
+function resolveBundledAssetPath(path) {
+  const cleanPath = (path || "").toString().trim();
+  if (!cleanPath) return "";
+  if (/^(?:[a-z]+:)?\/\//i.test(cleanPath) || cleanPath.startsWith("data:")) return cleanPath;
+  return cleanPath
+    .split("/")
+    .map((segment, index) => {
+      if (index === 0 && /^[.]{1,2}$/.test(segment)) return segment;
+      try {
+        return encodeURIComponent(decodeURIComponent(segment));
+      } catch {
+        return encodeURIComponent(segment);
+      }
+    })
+    .join("/");
+}
+
+function withTimeout(promiseFactory, timeoutMs, label) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`${label} timed out after ${timeoutMs}ms.`));
+    }, timeoutMs);
+
+    Promise.resolve()
+      .then(promiseFactory)
+      .then((value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
 }
 
 function loadScriptOnce(src) {
@@ -2057,7 +2110,7 @@ function getLeftSearchDocKey(doc) {
 async function extractRawSearchTextFromArrayBuffer(arrayBuffer) {
   try {
     const mammothApi = await ensureMammothLoaded();
-    const result = await mammothApi.extractRawText({ arrayBuffer });
+    const result = await withTimeout(() => mammothApi.extractRawText({ arrayBuffer }), DOC_RENDER_TIMEOUT_MS, "Document text extraction");
     return normalizeSearchValue(result?.value || "");
   } catch {
     return "";
@@ -2131,7 +2184,7 @@ async function queueLeftSearchIndexDoc(doc) {
   try {
     let extracted = "";
     if (doc?.path && getFileExtension(doc.fileName) === ".docx") {
-      const buffer = await loadArrayBufferFromPath(doc.path);
+      const buffer = await loadArrayBufferFromPath(resolveBundledAssetPath(doc.path));
       extracted = await extractRawSearchTextFromArrayBuffer(buffer);
     } else if (getFileExtension(doc?.fileName) === ".docx" && (doc?.fileBase64 || doc?.docxBase64)) {
       const bytes = bytesFromBase64(doc.fileBase64 || doc.docxBase64);
@@ -2314,9 +2367,13 @@ async function renderDocxToHtmlWithCache(doc, loadBuffer) {
 
     await nextPaint();
 
-    const result = await mammothApi.convertToHtml(
-      { arrayBuffer: buffer },
-      MAMMOTH_OPTIONS
+    const result = await withTimeout(
+      () => mammothApi.convertToHtml(
+        { arrayBuffer: buffer },
+        MAMMOTH_OPTIONS
+      ),
+      DOC_RENDER_TIMEOUT_MS,
+      "Document rendering"
     );
 
     const rendered = {
@@ -3011,18 +3068,20 @@ async function loadSiteDoc(doc) {
   const ext = getFileExtension(doc.fileName);
 
   if (ext === ".pdf") {
-    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${doc.path}" title="${escapeHtml(doc.title)}"></iframe></div>`);
+    const resolvedPath = resolveBundledAssetPath(doc.path);
+    setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${resolvedPath}" title="${escapeHtml(doc.title)}"></iframe></div>`);
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
-    setPreviewHtml(`<img src="${doc.path}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
+    const resolvedPath = resolveBundledAssetPath(doc.path);
+    setPreviewHtml(`<img src="${resolvedPath}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
     return;
   }
 
   try {
     const rendered = await renderDocxToHtmlWithCache(doc, async () => {
-      return loadArrayBufferFromPath(doc.path);
+      return loadArrayBufferFromPath(resolveBundledAssetPath(doc.path));
     });
     setPreviewHtml(rendered.html);
   } catch (e) {
