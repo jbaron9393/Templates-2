@@ -410,11 +410,19 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
 }
 
 .preview-search input {
   min-width: 220px;
-  flex: 1;
+  flex: 1 1 280px;
+}
+
+.preview-search .search-meta {
+  min-width: 72px;
 }
 
 .search-hit {
@@ -545,9 +553,6 @@
       text-orientation: mixed;
       letter-spacing: .04em;
     }
-    .hidden-search-shell {
-      display: none;
-    }
     .floating-search-panel {
       position: fixed;
       top: 50%;
@@ -599,6 +604,7 @@
     }
     body.dark .panel,
     body.dark .preview,
+    body.dark .preview-search,
     body.dark input[type="text"],
     body.dark select,
     body.dark input[type="file"],
@@ -865,11 +871,12 @@
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
-        <div class="preview-search hidden-search-shell" aria-hidden="true">
-          <input id="previewSearch" type="text" placeholder="Search within preview..." />
-          <button class="btn secondary compact" id="btnSearchFind">Search (Enter)</button>
+        <div class="preview-search">
+          <input id="previewSearch" type="text" placeholder="Search within this document..." />
+          <button class="btn secondary compact" id="btnSearchFind">Next</button>
+          <button class="btn secondary compact" id="btnSearchPrev">Prev</button>
           <button class="btn secondary compact" id="btnSearchClear">Clear</button>
-          <span class="muted" id="searchMeta"></span>
+          <span class="muted search-meta" id="searchMeta">Type to highlight matches.</span>
         </div>
 
         <div class="preview" id="preview">
@@ -1298,6 +1305,7 @@ const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
+const btnSearchPrevEl = $("#btnSearchPrev");
 const btnToTopEl = $("#btnToTop");
 const btnSearchFloatEl = $("#btnSearchFloat");
 const floatingSearchPanelEl = $("#floatingSearchPanel");
@@ -2566,7 +2574,7 @@ function clearPreviewSearch() {
 
 function updateSearchMeta() {
   if (!previewSearchEl.value.trim()) {
-    searchMetaEl.textContent = "";
+    searchMetaEl.textContent = "Type to highlight matches.";
     updateFloatingSearchMeta();
     return;
   }
@@ -3244,6 +3252,7 @@ btnSearchFloatEl.addEventListener("click", (e) => {
   toggleFloatingSearch();
 });
 $("#btnSearchFind").addEventListener("click", () => jumpToSearchMatch(true));
+btnSearchPrevEl.addEventListener("click", () => jumpToSearchMatch(false));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
 btnFloatingSearchFindEl.addEventListener("click", () => {
   const nextQuery = floatingPreviewSearchEl.value;
