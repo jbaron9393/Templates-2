@@ -2477,7 +2477,6 @@ function updateFloatingSearchMeta() {
 }
 
 function updateFloatingSearchVisibility() {
-  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
   const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
   const showPanel = floatingSearchPinnedOpen || (isScrolling && (hasQuery || panelFocused));
