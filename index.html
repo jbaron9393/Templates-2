@@ -528,15 +528,43 @@
       background: #CFB87C;
       color: #000;
     }
-    .clear-search-float {
-      bottom: 68px;
+    .quick-note-float {
+      bottom: 156px;
+      font-size: .82rem;
+      padding: 7px 11px;
+    }
+    .search-float {
+      bottom: 112px;
       padding: 7px 11px;
       font-size: .82rem;
     }
-    .quick-note-float {
+    .floating-search-panel {
+      position: fixed;
+      right: 24px;
       bottom: 112px;
-      font-size: .82rem;
-      padding: 7px 11px;
+      z-index: 51;
+      width: min(360px, calc(100vw - 32px));
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(207,184,124,.9);
+      border-radius: 14px;
+      box-shadow: 0 14px 32px rgba(0,0,0,.18);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+    }
+    .floating-search-panel.hidden {
+      display: none;
+    }
+    .floating-search-panel-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .floating-search-panel-row input {
+      min-width: 0;
+      flex: 1;
     }
     .note-category-chip {
       font-size: .72rem;
@@ -634,6 +662,10 @@
       background: rgba(23,29,38,.96);
       border-color: #CFB87C;
       color: #CFB87C;
+    }
+    body.dark .floating-search-panel {
+      background: rgba(27,33,42,.96);
+      border-color: rgba(207,184,124,.82);
     }
     body.dark .note-category-chip {
       background: #3a3528;
@@ -820,7 +852,17 @@
     Last updated February 2026
   </div>
 
-  <button class="to-top-btn clear-search-float hidden" id="btnClearSearchFloat" aria-label="Clear search">✕ Search</button>
+  <button class="to-top-btn search-float hidden" id="btnSearchFloat" aria-label="Open floating search">🔎 Search</button>
+  <div class="floating-search-panel hidden" id="floatingSearchPanel" aria-hidden="true">
+    <div class="floating-search-panel-row">
+      <input id="floatingPreviewSearch" type="text" placeholder="Search within preview..." />
+      <button class="btn secondary compact" id="btnFloatingSearchFind">Find</button>
+      <button class="btn secondary compact" id="btnFloatingSearchClear">Clear</button>
+    </div>
+    <div class="floating-search-panel-row">
+      <span class="muted" id="floatingSearchMeta">Type to highlight matches.</span>
+    </div>
+  </div>
   <button class="to-top-btn quick-note-float hidden" id="btnQuickNote" aria-label="Add note from selected text">📝 Add Note</button>
   <button class="to-top-btn hidden" id="btnToTop" aria-label="Return to top">↑ Top</button>
 
@@ -881,6 +923,324 @@ const DOC_TYPE_PRIORITY = {
 const LOCAL_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
 
+const BUNDLED_DOCS_INDEX_FALLBACK = {
+  "categories": [
+    "Biopsies (non-derm)",
+    "BM-Heme-Lymphoma",
+    "Breast",
+    "BST",
+    "Derm",
+    "Faxitron",
+    "Frozens",
+    "GI",
+    "GU",
+    "GYN",
+    "Heart",
+    "HNE",
+    "Liver",
+    "Lung",
+    "Neuro and Eye",
+    "Pediatric Tumors"
+  ],
+  "files": [
+    {
+      "fileName": "Breast/Mastectomy Grossing.docx",
+      "title": "Mastectomy Grossing",
+      "category": "Breast"
+    },
+    {
+      "fileName": "Breast/Breast Sentinel Lymph Node Frozen Worksheet.docx",
+      "title": "Breast Sentinel Lymph Node Frozen Worksheet",
+      "category": "Breast"
+    },
+    {
+      "fileName": "Breast/Breast tissue mammoplasty-gynecomastia-gender affirming.docx",
+      "title": "Breast Tissue Mammoplasty, Gynecomastia, Gender-Affirming",
+      "category": "Breast"
+    },
+    {
+      "fileName": "Breast/Lump-Excisional Biopsy.docx",
+      "title": "Lump Excisional Biopsy",
+      "category": "Breast"
+    },
+    {
+      "fileName": "Breast/Sentinel Lymph Node- Breast.docx",
+      "title": "Sentinel Lymph Node – Breast",
+      "category": "Breast"
+    },
+    {
+      "fileName": "Biopsies (non-derm)/GI Biopsy Headers and Formatting.docx",
+      "title": "GI Biopsy Headers and Formatting",
+      "category": "Biopsies (non-derm)"
+    },
+    {
+      "fileName": "BM-Heme-Lymphoma/Bone marrow Acccessioning and Grossing.docx",
+      "title": "Bone Marrow Accessioning and Grossing",
+      "category": "BM-Heme-Lymphoma"
+    },
+    {
+      "fileName": "BM-Heme-Lymphoma/CU Lymphoma Protocol__02-06-2023.pdf",
+      "title": "CU Lymphoma Protocol (02-06-2023)",
+      "category": "BM-Heme-Lymphoma"
+    },
+    {
+      "fileName": "BST/BST grossing info.docx",
+      "title": "BST Grossing Information",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/BST Grossing Main.docx",
+      "title": "BST Grossing Main",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/BST Photograph policy.docx",
+      "title": "BST Photograph Policy",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/BST Specimen List.docx",
+      "title": "BST Specimen List",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/BST.james version.pdf",
+      "title": "BST example - Knee, Hip, Leg",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/BST.james version v2 fracture.pdf",
+      "title": "BST example - fracture",
+      "category": "BST"
+    },
+    {
+      "fileName": "BST/Updated BST rotation outline (v2).docx",
+      "title": "Updated BST Rotation Outline (v2)",
+      "category": "BST"
+    },
+    {
+      "fileName": "Derm/Mohs.docx",
+      "title": "Mohs",
+      "category": "Derm"
+    },
+    {
+      "fileName": "Derm/Oriented Ellipse.docx",
+      "title": "Oriented Ellipse",
+      "category": "Derm"
+    },
+    {
+      "fileName": "Derm/Shave-Punch Biopsy.docx",
+      "title": "Shave-Punch Biopsy",
+      "category": "Derm"
+    },
+    {
+      "fileName": "Derm/Unoriented Ellipse.docx",
+      "title": "Unoriented Ellipse",
+      "category": "Derm"
+    },
+    {
+      "fileName": "Faxitron/How-to guide.docx",
+      "title": "How-To Guide",
+      "category": "Faxitron"
+    },
+    {
+      "fileName": "Faxitron/Saving Faxitron Images.docx",
+      "title": "Saving Faxitron Images",
+      "category": "Faxitron"
+    },
+    {
+      "fileName": "Frozens/Cancelling a FS block.docx",
+      "title": "Cancelling a Frozen Section Block",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "Frozens/Cryostat troubleshooting.docx",
+      "title": "Cryostat Troubleshooting",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "Frozens/How to add blocks- CoPath.docx",
+      "title": "How to Add Blocks – CoPath",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "Frozens/Printing Frozen Slide Labels.docx",
+      "title": "Printing Frozen Slide Labels",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "Frozens/Responsiblities.docx",
+      "title": "Frozen Section Responsibilities",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "Frozens/Stainline.docx",
+      "title": "Stainline",
+      "category": "Frozens"
+    },
+    {
+      "fileName": "GI 1,2&3/GI 1&2 Grossing TEMPLATES.docx",
+      "title": "GI 1&2 Grossing Templates",
+      "category": "GI"
+    },
+    {
+      "fileName": "GI 1,2&3/whipple and distal panc.docx",
+      "title": "Whipple and Distal Pancreatectomy",
+      "category": "GI"
+    },
+    {
+      "fileName": "GI 1,2&3/Whipple grossing checklist.docx",
+      "title": "Whipple Grossing Checklist",
+      "category": "GI"
+    },
+    {
+      "fileName": "GU/GU Specimens COMPLETE.docx",
+      "title": "GU Specimens Complete",
+      "category": "GU"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/Hysterectomy ~BENIGN~ for prolapse, leiomyoma and non malignancy Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Benign",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/Hysterectomy ~CANCER~ for endometrial hyperplasia cancer Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Endometrial Hyperplasia / Cancer",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/Hysterectomy for ~CERVICAL CANCER~ Gross Protocol and Template 041724.docx",
+      "title": "Hysterectomy – Cervical Cancer",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/Lymphatic Drainage of Uterus Illustration.jpg",
+      "title": "Lymphatic Drainage of Uterus (Illustration)",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/GYN Quick Reference Guide 02072025.docx",
+      "title": "GYN Quick Reference Guide",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN1/Ovary and fallopian tube Gross Protocol and Templates  040324.docx",
+      "title": "Ovary and Fallopian Tube Gross Protocol and Templates",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Cervix LEEP or cone Gross Protocol and Template 041624.docx",
+      "title": "Cervix LEEP or Cone – Gross Protocol and Template",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Furcate Cord Insertion.jpg",
+      "title": "Furcate Cord Insertion (Illustration)",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Hysterectomy gravid with Placenta in Situ Gross Protocol and Template 061621.docx",
+      "title": "Gravid Hysterectomy with Placenta In Situ",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Pelvic Exenteration Gross Protocol 101121.docx",
+      "title": "Pelvic Exenteration Gross Protocol",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Placenta ~SINGLETON~ Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Singleton",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Placenta twin 2 discs Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Twin (Two Discs)",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Placenta twin fused discs template Gross Protocol and Template 041624.docx",
+      "title": "Placenta – Twin (Fused Discs)",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Products of Conception FAQs 041624.docx",
+      "title": "Products of Conception FAQs",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Products of Conception Gross Protocol and Template 041624.docx",
+      "title": "Products of Conception Gross Protocol and Template",
+      "category": "GYN"
+    },
+    {
+      "fileName": "GYN-OB 1&2/GYN2/Vulvectomy Gross Protocol and Template 041724.docx",
+      "title": "Vulvectomy Gross Protocol and Template",
+      "category": "GYN"
+    },
+    {
+      "fileName": "Heart/Gross Heart Explants 02.06.23.docx",
+      "title": "Gross Heart Explants (02.06.23)",
+      "category": "Heart"
+    },
+    {
+      "fileName": "Heart/Gross Heart ExplantsNEW10.7.25.docx",
+      "title": "Gross Heart Explants (10.7.25)",
+      "category": "Heart"
+    },
+    {
+      "fileName": "Heart/Heart Ditzels.docx",
+      "title": "Heart Ditzels",
+      "category": "Heart"
+    },
+    {
+      "fileName": "Heart/Heart others.docx",
+      "title": "Heart Others",
+      "category": "Heart"
+    },
+    {
+      "fileName": "HNE/HNE Grossing Guide TEMPLATES.docx",
+      "title": "HNE Grossing Guide Templates",
+      "category": "HNE"
+    },
+    {
+      "fileName": "Liver/Liver segments picture.jpg",
+      "title": "Liver Segments (Illustration)",
+      "category": "Liver"
+    },
+    {
+      "fileName": "Liver/liver templates.docx",
+      "title": "Liver Grossing Templates",
+      "category": "Liver"
+    },
+    {
+      "fileName": "Lung/Lung Grossing and Templates.docx",
+      "title": "Lung Grossing and Templates",
+      "category": "Lung"
+    },
+    {
+      "fileName": "Neuro and Eye/Eye Diagram - 1.pdf",
+      "title": "Eye Diagram 1",
+      "category": "Neuro and Eye"
+    },
+    {
+      "fileName": "Neuro and Eye/Eye Diagram - 2.pdf",
+      "title": "Eye Diagram 2",
+      "category": "Neuro and Eye"
+    },
+    {
+      "fileName": "Neuro and Eye/Neuro Templates.docx",
+      "title": "Neuro Templates",
+      "category": "Neuro and Eye"
+    },
+    {
+      "fileName": "Pediatric Tumors/FAQ.docx",
+      "title": "Pediatric Tumors FAQ",
+      "category": "Pediatric Tumors"
+    }
+  ]
+};
+
 const $ = (sel) => document.querySelector(sel);
 const mainEl = $(".main");
 const panelResizerEl = $("#panelResizer");
@@ -901,7 +1261,12 @@ const previewMetaEl = $("#previewMeta");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
 const btnToTopEl = $("#btnToTop");
-const btnClearSearchFloatEl = $("#btnClearSearchFloat");
+const btnSearchFloatEl = $("#btnSearchFloat");
+const floatingSearchPanelEl = $("#floatingSearchPanel");
+const floatingPreviewSearchEl = $("#floatingPreviewSearch");
+const floatingSearchMetaEl = $("#floatingSearchMeta");
+const btnFloatingSearchFindEl = $("#btnFloatingSearchFind");
+const btnFloatingSearchClearEl = $("#btnFloatingSearchClear");
 const btnQuickNoteEl = $("#btnQuickNote");
 const btnAddNoteEl = $("#btnAddNote");
 const btnNewNoteEl = $("#btnNewNote");
@@ -925,6 +1290,9 @@ let activeSiteDocPath = null;
 let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
+let floatingSearchHideTimer = null;
+let floatingSearchTransientVisible = false;
+let floatingSearchPinnedOpen = false;
 let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
 let bundledCategoryCanonical = new Map([[normalizeCategory("Uncategorized"), "Uncategorized"]]);
@@ -2067,31 +2435,97 @@ function clearSearchHighlights() {
   updateSearchMeta();
 }
 
-function updateFloatingSearchClear() {
+function syncFloatingSearchInput() {
+  if (!floatingPreviewSearchEl) return;
+  if (floatingPreviewSearchEl.value !== previewSearchEl.value) {
+    floatingPreviewSearchEl.value = previewSearchEl.value;
+  }
+}
+
+function updateFloatingSearchMeta() {
+  if (!floatingSearchMetaEl) return;
+  floatingSearchMetaEl.textContent = searchMetaEl.textContent || "Type to highlight matches.";
+}
+
+function updateFloatingSearchVisibility() {
+  const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
   const hasQuery = !!previewSearchEl.value.trim();
-  btnClearSearchFloatEl.classList.toggle("hidden", !hasQuery);
+  const panelFocused = floatingSearchPanelEl.matches(":focus-within");
+  const showPanel = isScrolling && (floatingSearchPinnedOpen || hasQuery || panelFocused);
+  const showLauncher = isScrolling && (floatingSearchTransientVisible || showPanel);
+
+  btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
+  floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
+  floatingSearchPanelEl.setAttribute("aria-hidden", showPanel ? "false" : "true");
 }
 
 function clearPreviewSearch() {
   previewSearchEl.value = "";
+  syncFloatingSearchInput();
   clearSearchHighlights();
-  updateFloatingSearchClear();
+  floatingSearchPinnedOpen = false;
+  updateFloatingSearchVisibility();
 }
 
 function updateSearchMeta() {
   if (!previewSearchEl.value.trim()) {
     searchMetaEl.textContent = "";
+    updateFloatingSearchMeta();
     return;
   }
   if (!searchMatchGroups.length) {
     searchMetaEl.textContent = "0 matches";
+    updateFloatingSearchMeta();
     return;
   }
   searchMetaEl.textContent = `${activeSearchIndex + 1} / ${searchMatchGroups.length}`;
+  updateFloatingSearchMeta();
 }
 
 function runPreviewSearch() {
   refreshSearchHighlights(true);
+  updateFloatingSearchVisibility();
+}
+
+function getSearchViewportCenterY() {
+  const previewRect = previewEl.getBoundingClientRect();
+  return previewRect.top + (previewRect.height / 2);
+}
+
+function findClosestSearchMatchIndex() {
+  if (!searchMatchGroups.length) return -1;
+
+  const viewportCenterY = getSearchViewportCenterY();
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+
+  searchMatchGroups.forEach((group, index) => {
+    const mark = group.marks?.[0];
+    if (!mark) return;
+    const rect = mark.getBoundingClientRect();
+    const markCenterY = rect.top + (rect.height / 2);
+    const distance = Math.abs(markCenterY - viewportCenterY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex;
+}
+
+function activateSearchMatch(index, { scrollBehavior = "smooth" } = {}) {
+  if (index < 0 || index >= searchMatchGroups.length) return;
+
+  searchMatchGroups.forEach((group) => {
+    group.marks.forEach((mark) => mark.classList.remove("active"));
+  });
+
+  activeSearchIndex = index;
+  const group = searchMatchGroups[activeSearchIndex];
+  group.marks.forEach((mark) => mark.classList.add("active"));
+  group.marks[0].scrollIntoView({ behavior: scrollBehavior, block: "center" });
+  updateSearchMeta();
 }
 
 function jumpToSearchMatch(next = true) {
@@ -2100,22 +2534,19 @@ function jumpToSearchMatch(next = true) {
   }
   if (!searchMatchGroups.length) return;
 
-  searchMatchGroups.forEach((group) => {
-    group.marks.forEach((mark) => mark.classList.remove("active"));
-  });
-  if (next) {
-    activeSearchIndex = (activeSearchIndex + 1) % searchMatchGroups.length;
-  } else {
-    activeSearchIndex = (activeSearchIndex - 1 + searchMatchGroups.length) % searchMatchGroups.length;
+  if (activeSearchIndex === -1) {
+    activateSearchMatch(findClosestSearchMatchIndex());
+    return;
   }
 
-  const group = searchMatchGroups[activeSearchIndex];
-  group.marks.forEach((mark) => mark.classList.add("active"));
-  group.marks[0].scrollIntoView({ behavior: "smooth", block: "center" });
-  updateSearchMeta();
+  const nextIndex = next
+    ? (activeSearchIndex + 1) % searchMatchGroups.length
+    : (activeSearchIndex - 1 + searchMatchGroups.length) % searchMatchGroups.length;
+  activateSearchMatch(nextIndex);
 }
 
 function refreshSearchHighlights(autoFocusFirst = true) {
+  syncFloatingSearchInput();
   const query = previewSearchEl.value.trim();
   clearSearchHighlights();
   if (!query) return;
@@ -2190,7 +2621,7 @@ function refreshSearchHighlights(autoFocusFirst = true) {
 
   if (searchMatchGroups.length) {
     activeSearchIndex = -1;
-    if (autoFocusFirst) jumpToSearchMatch(true);
+    if (autoFocusFirst) activateSearchMatch(findClosestSearchMatchIndex());
     else updateSearchMeta();
   } else {
     updateSearchMeta();
@@ -2303,10 +2734,16 @@ async function loadSiteDoc(doc) {
 
 async function loadBundledDocs() {
   try {
-    const response = await fetch("./docs/word-docs/index.json", { cache: "no-store" });
-    if (!response.ok) throw new Error("index.json not found");
+    let payload = BUNDLED_DOCS_INDEX_FALLBACK;
 
-    const payload = await response.json();
+    try {
+      const response = await fetch("./docs/word-docs/index.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("index.json not found");
+      payload = await response.json();
+    } catch (fetchError) {
+      console.warn("Falling back to embedded bundled docs index.", fetchError);
+    }
+
     const entries = Array.isArray(payload.files) ? payload.files : [];
     const indexCategories = Array.isArray(payload.categories) ? payload.categories : [];
 
@@ -2566,15 +3003,25 @@ function updateToTopVisibility() {
   const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
 
   if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
+  if (floatingSearchHideTimer) clearTimeout(floatingSearchHideTimer);
 
   if (!isScrolling) {
+    floatingSearchTransientVisible = false;
+    updateFloatingSearchVisibility();
     btnToTopEl.classList.add("hidden");
     return;
   }
 
+  floatingSearchTransientVisible = true;
+  updateFloatingSearchVisibility();
+
   btnToTopEl.classList.remove("hidden");
   topButtonHideTimer = setTimeout(() => {
     btnToTopEl.classList.add("hidden");
+  }, 900);
+  floatingSearchHideTimer = setTimeout(() => {
+    floatingSearchTransientVisible = false;
+    updateFloatingSearchVisibility();
   }, 900);
 }
 
@@ -2686,12 +3133,41 @@ leftSearchEl.addEventListener("input", () => {
 btnToTopEl.addEventListener("click", scrollToTop);
 previewEl.addEventListener("scroll", updateToTopVisibility);
 window.addEventListener("scroll", updateToTopVisibility);
+btnSearchFloatEl.addEventListener("click", () => {
+  floatingSearchPinnedOpen = !floatingSearchPinnedOpen;
+  updateFloatingSearchVisibility();
+  if (floatingSearchPinnedOpen) {
+    syncFloatingSearchInput();
+    floatingPreviewSearchEl.focus();
+    floatingPreviewSearchEl.select();
+  }
+});
 $("#btnSearchFind").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
-btnClearSearchFloatEl.addEventListener("click", clearPreviewSearch);
+btnFloatingSearchFindEl.addEventListener("click", () => {
+  const nextQuery = floatingPreviewSearchEl.value;
+  const queryChanged = previewSearchEl.value !== nextQuery;
+  previewSearchEl.value = nextQuery;
+
+  floatingSearchPinnedOpen = true;
+  if (queryChanged) {
+    runPreviewSearch();
+    return;
+  }
+
+  jumpToSearchMatch(true);
+  updateFloatingSearchVisibility();
+});
+btnFloatingSearchClearEl.addEventListener("click", clearPreviewSearch);
 previewSearchEl.addEventListener("input", () => {
   refreshSearchHighlights(false);
-  updateFloatingSearchClear();
+  updateFloatingSearchVisibility();
+});
+floatingPreviewSearchEl.addEventListener("input", () => {
+  floatingSearchPinnedOpen = true;
+  previewSearchEl.value = floatingPreviewSearchEl.value;
+  refreshSearchHighlights(false);
+  updateFloatingSearchVisibility();
 });
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
@@ -2703,6 +3179,26 @@ previewSearchEl.addEventListener("keydown", (e) => {
     clearPreviewSearch();
   }
 });
+floatingPreviewSearchEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const queryChanged = previewSearchEl.value !== floatingPreviewSearchEl.value;
+    floatingSearchPinnedOpen = true;
+    previewSearchEl.value = floatingPreviewSearchEl.value;
+    if (queryChanged) runPreviewSearch();
+    else jumpToSearchMatch(true);
+    updateFloatingSearchVisibility();
+  }
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (previewSearchEl.value.trim()) {
+      clearPreviewSearch();
+    } else {
+      floatingSearchPinnedOpen = false;
+      updateFloatingSearchVisibility();
+    }
+  }
+});
 
 // Initial render
 renderUnifiedNav();
@@ -2710,7 +3206,9 @@ setLibraryStatus();
 loadBundledDocs();
 setTheme(localStorage.getItem(THEME_KEY) || "light");
 updateToTopVisibility();
-updateFloatingSearchClear();
+syncFloatingSearchInput();
+updateFloatingSearchMeta();
+updateFloatingSearchVisibility();
 updateLeftSearchMeta();
 initPanelResizer();
 renderNotesList();
