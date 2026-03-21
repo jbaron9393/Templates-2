@@ -2479,11 +2479,39 @@ function updateFloatingSearchVisibility() {
   const hasQuery = !!previewSearchEl.value.trim();
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
   const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused || hasQuery;
-  const showPanel = floatingSearchPinnedOpen || (showLauncher && (hasQuery || panelFocused));
+  const showPanel = floatingSearchPinnedOpen || panelFocused || hasQuery;
 
-  btnSearchFloatEl.classList.remove("hidden");
+  btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
   floatingSearchPanelEl.setAttribute("aria-hidden", showPanel ? "false" : "true");
+}
+
+function openFloatingSearch({ selectText = true } = {}) {
+  floatingSearchTransientVisible = true;
+  floatingSearchPinnedOpen = true;
+  updateFloatingSearchVisibility();
+  syncFloatingSearchInput();
+  floatingPreviewSearchEl.focus();
+  if (selectText) floatingPreviewSearchEl.select();
+}
+
+function closeFloatingSearch({ clearQuery = false } = {}) {
+  if (clearQuery) {
+    clearPreviewSearch();
+    return;
+  }
+  floatingSearchPinnedOpen = false;
+  floatingSearchTransientVisible = false;
+  updateFloatingSearchVisibility();
+}
+
+function toggleFloatingSearch() {
+  const isOpen = !floatingSearchPanelEl.classList.contains("hidden");
+  if (isOpen) {
+    closeFloatingSearch();
+    return;
+  }
+  openFloatingSearch();
 }
 
 function clearPreviewSearch() {
@@ -3158,12 +3186,6 @@ previewEl.addEventListener("click", (e) => {
   if (anchor && previewEl.contains(anchor)) {
     if (!handlePreviewAnchorNavigation(anchor)) return;
     e.preventDefault();
-    return;
-  }
-
-  if (!floatingSearchPanelEl.classList.contains("hidden")) {
-    floatingSearchPinnedOpen = false;
-    updateFloatingSearchVisibility();
   }
 });
 leftSearchEl.addEventListener("input", () => {
@@ -3175,14 +3197,9 @@ leftSearchEl.addEventListener("input", () => {
 btnToTopEl.addEventListener("click", scrollToTop);
 previewEl.addEventListener("scroll", updateToTopVisibility);
 window.addEventListener("scroll", updateToTopVisibility);
-btnSearchFloatEl.addEventListener("click", () => {
-  floatingSearchPinnedOpen = !floatingSearchPinnedOpen;
-  updateFloatingSearchVisibility();
-  if (floatingSearchPinnedOpen) {
-    syncFloatingSearchInput();
-    floatingPreviewSearchEl.focus();
-    floatingPreviewSearchEl.select();
-  }
+btnSearchFloatEl.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleFloatingSearch();
 });
 $("#btnSearchFind").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
@@ -3245,20 +3262,14 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
     e.preventDefault();
-    floatingSearchTransientVisible = true;
-    floatingSearchPinnedOpen = true;
-    updateFloatingSearchVisibility();
-    syncFloatingSearchInput();
-    floatingPreviewSearchEl.focus();
-    floatingPreviewSearchEl.select();
+    toggleFloatingSearch();
   }
 });
 
 document.addEventListener("click", (e) => {
   if (floatingSearchPanelEl.classList.contains("hidden")) return;
   if (floatingSearchPanelEl.contains(e.target) || btnSearchFloatEl.contains(e.target)) return;
-  floatingSearchPinnedOpen = false;
-  updateFloatingSearchVisibility();
+  closeFloatingSearch();
 });
 
 // Initial render
