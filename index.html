@@ -410,11 +410,19 @@
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+  padding: 12px 14px;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  background: #fafafa;
 }
 
 .preview-search input {
   min-width: 220px;
-  flex: 1;
+  flex: 1 1 280px;
+}
+
+.preview-search .search-meta {
+  min-width: 72px;
 }
 
 .search-hit {
@@ -534,19 +542,25 @@
       padding: 7px 11px;
     }
     .search-float {
-      bottom: 112px;
-      padding: 7px 11px;
+      top: 50%;
+      right: 0;
+      bottom: auto;
+      transform: translateY(-50%);
+      padding: 14px 8px;
       font-size: .82rem;
-    }
-    .hidden-search-shell {
-      display: none;
+      border-radius: 14px 0 0 14px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      letter-spacing: .04em;
     }
     .floating-search-panel {
       position: fixed;
+      top: 50%;
       right: 24px;
-      bottom: 112px;
+      bottom: auto;
+      transform: translateY(-50%);
       z-index: 51;
-      width: min(360px, calc(100vw - 32px));
+      width: min(400px, calc(100vw - 56px));
       background: rgba(255,255,255,.96);
       border: 1px solid rgba(207,184,124,.9);
       border-radius: 14px;
@@ -564,6 +578,11 @@
       display: flex;
       gap: 8px;
       align-items: center;
+    }
+    .floating-search-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
     }
     .floating-search-panel-row input {
       min-width: 0;
@@ -585,6 +604,7 @@
     }
     body.dark .panel,
     body.dark .preview,
+    body.dark .preview-search,
     body.dark input[type="text"],
     body.dark select,
     body.dark input[type="file"],
@@ -669,6 +689,24 @@
     body.dark .floating-search-panel {
       background: rgba(27,33,42,.96);
       border-color: rgba(207,184,124,.82);
+    }
+    @media (max-width: 900px) {
+      .search-float {
+        top: auto;
+        bottom: 112px;
+        right: 24px;
+        transform: none;
+        writing-mode: horizontal-tb;
+        border-radius: 999px;
+        padding: 7px 11px;
+      }
+      .floating-search-panel {
+        top: auto;
+        bottom: 112px;
+        right: 16px;
+        transform: none;
+        width: min(360px, calc(100vw - 32px));
+      }
     }
     body.dark .note-category-chip {
       background: #3a3528;
@@ -833,11 +871,12 @@
       </div>
 
       <div class="panel-body" style="display:flex; flex-direction:column; gap:10px;">
-        <div class="preview-search hidden-search-shell" aria-hidden="true">
-          <input id="previewSearch" type="text" placeholder="Search within preview..." />
-          <button class="btn secondary compact" id="btnSearchFind">Search (Enter)</button>
+        <div class="preview-search">
+          <input id="previewSearch" type="text" placeholder="Search within this document..." />
+          <button class="btn secondary compact" id="btnSearchFind">Search</button>
+          <button class="btn secondary compact" id="btnSearchPrev">Prev</button>
           <button class="btn secondary compact" id="btnSearchClear">Clear</button>
-          <span class="muted" id="searchMeta"></span>
+          <span class="muted search-meta" id="searchMeta">Type to highlight matches.</span>
         </div>
 
         <div class="preview" id="preview">
@@ -855,11 +894,14 @@
     Last updated February 2026
   </div>
 
-  <button class="to-top-btn search-float hidden" id="btnSearchFloat" aria-label="Open floating search">🔎 Search</button>
+  <button class="to-top-btn search-float hidden" id="btnSearchFloat" aria-label="Open search tools">🔎 Search</button>
   <div class="floating-search-panel hidden" id="floatingSearchPanel" aria-hidden="true">
     <div class="floating-search-panel-row">
       <input id="floatingPreviewSearch" type="text" placeholder="Search within preview..." />
-      <button class="btn secondary compact" id="btnFloatingSearchFind">Find</button>
+    </div>
+    <div class="floating-search-actions">
+      <button class="btn secondary compact" id="btnFloatingSearchFind">Search</button>
+      <button class="btn secondary compact" id="btnFloatingSearchPrev">Prev</button>
       <button class="btn secondary compact" id="btnFloatingSearchClear">Clear</button>
     </div>
     <div class="floating-search-panel-row">
@@ -1263,12 +1305,14 @@ const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
+const btnSearchPrevEl = $("#btnSearchPrev");
 const btnToTopEl = $("#btnToTop");
 const btnSearchFloatEl = $("#btnSearchFloat");
 const floatingSearchPanelEl = $("#floatingSearchPanel");
 const floatingPreviewSearchEl = $("#floatingPreviewSearch");
 const floatingSearchMetaEl = $("#floatingSearchMeta");
 const btnFloatingSearchFindEl = $("#btnFloatingSearchFind");
+const btnFloatingSearchPrevEl = $("#btnFloatingSearchPrev");
 const btnFloatingSearchClearEl = $("#btnFloatingSearchClear");
 const btnQuickNoteEl = $("#btnQuickNote");
 const btnAddNoteEl = $("#btnAddNote");
@@ -1293,6 +1337,7 @@ let activeSiteDocPath = null;
 let searchMatchGroups = [];
 let activeSearchIndex = -1;
 let topButtonHideTimer = null;
+let floatingSearchTransientVisible = false;
 let floatingSearchPinnedOpen = false;
 let bundledStats = { docs: 0, categories: 0 };
 let bundledDocs = [];
@@ -2475,10 +2520,15 @@ function updateFloatingSearchMeta() {
   floatingSearchMetaEl.textContent = searchMetaEl.textContent || "Type to highlight matches.";
 }
 
+function hasActivePreviewDocument() {
+  return !!getActiveDocContext();
+}
+
 function updateFloatingSearchVisibility() {
-  const panelFocused = floatingSearchPanelEl.matches(":focus-within");
-  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused;
-  const showPanel = floatingSearchPinnedOpen || panelFocused;
+  const hasActiveDoc = hasActivePreviewDocument();
+  const panelFocused = hasActiveDoc && floatingSearchPanelEl.matches(":focus-within");
+  const showLauncher = hasActiveDoc;
+  const showPanel = hasActiveDoc && (floatingSearchPinnedOpen || panelFocused);
 
   btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
@@ -2518,12 +2568,13 @@ function clearPreviewSearch() {
   syncFloatingSearchInput();
   clearSearchHighlights();
   floatingSearchPinnedOpen = false;
+  floatingSearchTransientVisible = hasActivePreviewDocument();
   updateFloatingSearchVisibility();
 }
 
 function updateSearchMeta() {
   if (!previewSearchEl.value.trim()) {
-    searchMetaEl.textContent = "";
+    searchMetaEl.textContent = "Type to highlight matches.";
     updateFloatingSearchMeta();
     return;
   }
@@ -2536,9 +2587,18 @@ function updateSearchMeta() {
   updateFloatingSearchMeta();
 }
 
+function jumpToClosestSearchMatch() {
+  if (!searchMatchGroups.length && previewSearchEl.value.trim()) {
+    refreshSearchHighlights(false);
+  }
+  if (!searchMatchGroups.length) return;
+  activateSearchMatch(findClosestSearchMatchIndex());
+}
+
 function runPreviewSearch() {
   floatingSearchPinnedOpen = true;
-  refreshSearchHighlights(true);
+  refreshSearchHighlights(false);
+  jumpToClosestSearchMatch();
   updateFloatingSearchVisibility();
 }
 
@@ -3200,9 +3260,15 @@ btnSearchFloatEl.addEventListener("click", (e) => {
   e.stopPropagation();
   toggleFloatingSearch();
 });
-$("#btnSearchFind").addEventListener("click", () => jumpToSearchMatch(true));
+$("#btnSearchFind").addEventListener("click", runPreviewSearch);
+btnSearchPrevEl.addEventListener("click", () => jumpToSearchMatch(false));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
 btnFloatingSearchFindEl.addEventListener("click", () => {
+  previewSearchEl.value = floatingPreviewSearchEl.value;
+  floatingSearchPinnedOpen = true;
+  runPreviewSearch();
+});
+btnFloatingSearchPrevEl.addEventListener("click", () => {
   const nextQuery = floatingPreviewSearchEl.value;
   const queryChanged = previewSearchEl.value !== nextQuery;
   previewSearchEl.value = nextQuery;
@@ -3213,7 +3279,7 @@ btnFloatingSearchFindEl.addEventListener("click", () => {
     return;
   }
 
-  jumpToSearchMatch(true);
+  jumpToSearchMatch(false);
   updateFloatingSearchVisibility();
 });
 btnFloatingSearchClearEl.addEventListener("click", clearPreviewSearch);
@@ -3230,7 +3296,7 @@ floatingPreviewSearchEl.addEventListener("input", () => {
 previewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    jumpToSearchMatch(true);
+    runPreviewSearch();
   }
   if (e.key === "Escape" && previewSearchEl.value.trim()) {
     e.preventDefault();
@@ -3240,11 +3306,9 @@ previewSearchEl.addEventListener("keydown", (e) => {
 floatingPreviewSearchEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") {
     e.preventDefault();
-    const queryChanged = previewSearchEl.value !== floatingPreviewSearchEl.value;
     floatingSearchPinnedOpen = true;
     previewSearchEl.value = floatingPreviewSearchEl.value;
-    if (queryChanged) runPreviewSearch();
-    else jumpToSearchMatch(true);
+    runPreviewSearch();
     updateFloatingSearchVisibility();
   }
   if (e.key === "Escape") {
