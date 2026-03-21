@@ -2477,6 +2477,7 @@ function updateFloatingSearchMeta() {
 
 function updateFloatingSearchVisibility() {
   const panelFocused = floatingSearchPanelEl.matches(":focus-within");
+  const showLauncher = floatingSearchTransientVisible || floatingSearchPinnedOpen || panelFocused;
   const showPanel = floatingSearchPinnedOpen || panelFocused;
 
   btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
