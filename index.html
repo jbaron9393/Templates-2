@@ -1300,6 +1300,7 @@ const notesCategoryEl = $("#notesCategory");
 const notesHeadEl = $("#notesHead");
 const notesCountEl = $("#notesCount");
 
+const rightPanelEl = $(".panel.right");
 const previewEl = $("#preview");
 const previewTitleEl = $("#previewTitle");
 const previewMetaEl = $("#previewMeta");
@@ -1350,6 +1351,7 @@ let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
 let previewContentType = "docx";
 let activePreviewObjectUrl = null;
+let activePreviewLoadToken = 0;
 let docRenderCache = new Map();
 let docRenderInFlight = new Map();
 let uploadedFileBytesCache = new Map();
@@ -2709,6 +2711,20 @@ function setPreviewHtml(html, { objectUrl = null } = {}) {
   updateAddNoteButtonState();
 }
 
+function beginPreviewLoad() {
+  activePreviewLoadToken += 1;
+  return activePreviewLoadToken;
+}
+
+function isPreviewLoadCurrent(token) {
+  return token === activePreviewLoadToken;
+}
+
+function revealPreviewPanel() {
+  if (!rightPanelEl || window.innerWidth > 1200) return;
+  rightPanelEl.scrollIntoView({ behavior: "smooth", block: "start", inline: "nearest" });
+}
+
 function clearPageHash() {
   if (!window.location.hash) return;
   history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
@@ -3006,6 +3022,7 @@ function refreshSearchHighlights(autoFocusFirst = true) {
 async function loadDoc(docId) {
   const d = state.docs.find(x => x.id === docId);
   if (!d) return;
+  const loadToken = beginPreviewLoad();
 
   activeDocId = docId;
   activeSiteDocPath = null;
@@ -3018,27 +3035,38 @@ async function loadDoc(docId) {
   previewMetaEl.textContent = `${d.category || "Uncategorized"} • added ${new Date(d.addedAtISO).toLocaleString()}`;
 
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
+  revealPreviewPanel();
 
   const bytes = getCachedUploadedBytes(d);
   if (!bytes.byteLength) {
+    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<div class="danger">This uploaded file appears empty.</div>`);
     return;
   }
 
   if (ext === ".pdf") {
     const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || "application/pdf" }));
+    if (!isPreviewLoadCurrent(loadToken)) {
+      URL.revokeObjectURL(fileUrl);
+      return;
+    }
     setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${fileUrl}" title="${escapeHtml(d.title)}"></iframe></div>`, { objectUrl: fileUrl });
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
     const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
+    if (!isPreviewLoadCurrent(loadToken)) {
+      URL.revokeObjectURL(fileUrl);
+      return;
+    }
     setPreviewHtml(`<img src="${fileUrl}" alt="${escapeHtml(d.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`, { objectUrl: fileUrl });
     return;
   }
 
   try {
     const rendered = await renderDocxToHtmlWithCache(d, async () => bytes.buffer);
+    if (!isPreviewLoadCurrent(loadToken)) return;
     const msgHtml = rendered.messages.length
       ? `<details style="margin-top:10px;">
           <summary class="muted">Conversion notes (${rendered.messages.length})</summary>
@@ -3050,11 +3078,13 @@ async function loadDoc(docId) {
 
     setPreviewHtml(rendered.html + msgHtml);
   } catch (e) {
+    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<div class="danger">Failed to render file: ${escapeHtml(e?.message || String(e))}</div>`);
   }
 }
 
 async function loadSiteDoc(doc) {
+  const loadToken = beginPreviewLoad();
   activeDocId = null;
   activeSiteDocPath = doc.path;
   previewContentType = getFileExtension(doc.fileName) === ".docx" ? "docx" : "binary";
@@ -3064,17 +3094,20 @@ async function loadSiteDoc(doc) {
   previewTitleEl.textContent = doc.title;
   previewMetaEl.textContent = `Library • ${doc.fileName}`;
   setPreviewHtml(`<div class="muted">Rendering…</div>`);
+  revealPreviewPanel();
 
   const ext = getFileExtension(doc.fileName);
 
   if (ext === ".pdf") {
     const resolvedPath = resolveBundledAssetPath(doc.path);
+    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<div class="pdf-preview-resizer"><iframe src="${resolvedPath}" title="${escapeHtml(doc.title)}"></iframe></div>`);
     return;
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
     const resolvedPath = resolveBundledAssetPath(doc.path);
+    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(`<img src="${resolvedPath}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
     return;
   }
@@ -3083,8 +3116,10 @@ async function loadSiteDoc(doc) {
     const rendered = await renderDocxToHtmlWithCache(doc, async () => {
       return loadArrayBufferFromPath(resolveBundledAssetPath(doc.path));
     });
+    if (!isPreviewLoadCurrent(loadToken)) return;
     setPreviewHtml(rendered.html);
   } catch (e) {
+    if (!isPreviewLoadCurrent(loadToken)) return;
     renderBundledFileFallback(doc, `Failed to render bundled DOCX: ${e?.message || String(e)}`);
   }
 }
