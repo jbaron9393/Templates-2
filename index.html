@@ -362,7 +362,7 @@
     }
     .subgroup-body {
       display: none;
-      padding: 8px;
+      padding: 10px;
     }
     .subgroup.open .subgroup-body {
       display: block;
@@ -558,10 +558,11 @@
       border: 1px solid rgba(207,184,124,.9);
       border-radius: 12px;
       box-shadow: 0 10px 24px rgba(0,0,0,.16);
-      padding: 8px;
+      padding: 10px;
       display: inline-flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
+      font-size: .95rem;
       backdrop-filter: blur(10px);
       transform: translateY(-50%);
     }
@@ -570,28 +571,28 @@
     }
     .floating-search-panel-row {
       display: flex;
-      gap: 6px;
+      gap: 8px;
       align-items: center;
       width: fit-content;
       max-width: 100%;
     }
     .floating-search-actions {
       display: flex;
-      gap: 4px;
+      gap: 6px;
       flex-wrap: wrap;
       width: fit-content;
       max-width: 100%;
     }
     .floating-search-actions .btn.compact {
-      padding: 4px 7px;
-      font-size: .74rem;
+      padding: 6px 10px;
+      font-size: .82rem;
     }
     .floating-search-panel .muted {
-      font-size: .76rem;
+      font-size: .85rem;
     }
     .floating-search-panel-row input {
-      min-width: 10ch;
-      width: clamp(10ch, var(--floating-search-input-width, 24ch), calc(100vw - 64px));
+      min-width: 14ch;
+      width: clamp(14ch, var(--floating-search-input-width, 28ch), calc(100vw - 64px));
       flex: 0 1 auto;
     }
     .note-category-chip {
@@ -1346,7 +1347,7 @@ let searchMatchGroups = [];
 function syncFloatingSearchInputWidth(value) {
   if (!floatingPreviewSearchEl) return;
   const basis = (value || floatingPreviewSearchEl.placeholder || "").trim();
-  const width = Math.min(Math.max(basis.length + 1, 10), 28);
+  const width = Math.min(Math.max(basis.length + 2, 14), 32);
   floatingPreviewSearchEl.style.setProperty("--floating-search-input-width", `${width}ch`);
 }
 let activeSearchIndex = -1;
