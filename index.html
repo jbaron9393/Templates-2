@@ -1353,14 +1353,6 @@ let activePreviewObjectUrl = null;
 let docRenderCache = new Map();
 let docRenderInFlight = new Map();
 let uploadedFileBytesCache = new Map();
-let mammothLoadPromise = null;
-
-const MAMMOTH_SCRIPT_SOURCES = [
-  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js",
-  "https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js",
-  "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
-];
-const MAMMOTH_SCRIPT_TIMEOUT_MS = 5000;
 const DOC_LOAD_TIMEOUT_MS = 12000;
 
 // -------------------- Utilities --------------------
