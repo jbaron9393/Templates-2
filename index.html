@@ -1355,6 +1355,7 @@ let activePreviewLoadToken = 0;
 let docRenderCache = new Map();
 let docRenderInFlight = new Map();
 let uploadedFileBytesCache = new Map();
+let mammothLoadPromise = null;
 const DOC_LOAD_TIMEOUT_MS = 12000;
 const DOC_RENDER_TIMEOUT_MS = 20000;
 const MAMMOTH_SCRIPT_TIMEOUT_MS = 10000;
@@ -2756,11 +2757,12 @@ function renderBundledFileFallback(doc, reason = "") {
   const message = reason
     ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(reason)}</div>`
     : "";
+  const resolvedPath = resolveBundledAssetPath(doc?.path);
 
   setPreviewHtml(`
     ${message}
     <div class="muted" style="margin-bottom:8px;">This bundled file could not be rendered in-browser.</div>
-    <a class="btn secondary compact" href="${doc.path}" target="_blank" rel="noopener">Open / download file</a>
+    <a class="btn secondary compact" href="${resolvedPath}" target="_blank" rel="noopener">Open / download file</a>
   `);
 }
 
