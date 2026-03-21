@@ -6,9 +6,6 @@
   <title>Grossing Manual</title>
   <link rel="icon" type="image/svg+xml" href="./blood-drop.svg" />
 
-  <!-- Mammoth (DOCX -> HTML in browser) -->
-  <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
-
   <style>
     /* --- Lightweight "cap_synoptic_generator.html"-ish layout: header + 2 panels --- */
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1356,6 +1353,15 @@ let activePreviewObjectUrl = null;
 let docRenderCache = new Map();
 let docRenderInFlight = new Map();
 let uploadedFileBytesCache = new Map();
+let mammothLoadPromise = null;
+
+const MAMMOTH_SCRIPT_SOURCES = [
+  "https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js",
+  "https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js",
+  "https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"
+];
+const MAMMOTH_SCRIPT_TIMEOUT_MS = 5000;
+const DOC_LOAD_TIMEOUT_MS = 12000;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -1438,6 +1444,69 @@ function inferMimeTypeFromFileName(fileName) {
   if (ext === ".png") return "image/png";
   if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   return "application/octet-stream";
+}
+
+function loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-src="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", resolve, { once: true });
+      existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+      if (existing.dataset.loaded === "true") resolve();
+      return;
+    }
+
+    const script = document.createElement("script");
+    let settled = false;
+    const finish = (handler) => (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      handler(value);
+    };
+    const timeoutId = window.setTimeout(() => {
+      script.remove();
+      finish(reject)(new Error(`Timed out loading ${src}`));
+    }, MAMMOTH_SCRIPT_TIMEOUT_MS);
+
+    script.src = src;
+    script.async = true;
+    script.dataset.src = src;
+    script.onload = finish(() => {
+      script.dataset.loaded = "true";
+      resolve();
+    });
+    script.onerror = finish(() => reject(new Error(`Failed to load ${src}`)));
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureMammothLoaded() {
+  if (window.mammoth) return window.mammoth;
+  if (mammothLoadPromise) return mammothLoadPromise;
+
+  mammothLoadPromise = (async () => {
+    const errors = [];
+
+    for (const src of MAMMOTH_SCRIPT_SOURCES) {
+      try {
+        await loadScriptOnce(src);
+        if (window.mammoth) return window.mammoth;
+        errors.push(`Loaded ${src} but Mammoth was unavailable.`);
+      } catch (error) {
+        errors.push(error?.message || String(error));
+      }
+    }
+
+    throw new Error(`Unable to load the DOCX rendering library. ${errors.join(" ")}`);
+  })();
+
+  try {
+    return await mammothLoadPromise;
+  } catch (error) {
+    mammothLoadPromise = null;
+    throw error;
+  }
 }
 
 function normalizeLibraryDoc(doc) {
@@ -1995,10 +2064,70 @@ function getLeftSearchDocKey(doc) {
 
 async function extractRawSearchTextFromArrayBuffer(arrayBuffer) {
   try {
-    const result = await mammoth.extractRawText({ arrayBuffer });
+    const mammothApi = await ensureMammothLoaded();
+    const result = await mammothApi.extractRawText({ arrayBuffer });
     return normalizeSearchValue(result?.value || "");
   } catch {
     return "";
+  }
+}
+
+function loadArrayBufferViaXhr(path) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", path, true);
+    xhr.responseType = "arraybuffer";
+    xhr.timeout = DOC_LOAD_TIMEOUT_MS;
+
+    xhr.onload = () => {
+      const status = xhr.status || 200;
+      if (status >= 200 && status < 300) {
+        resolve(xhr.response);
+        return;
+      }
+      reject(new Error(`Failed to load file (${status})`));
+    };
+
+    xhr.onerror = () => reject(new Error("Network error while loading file."));
+    xhr.onabort = () => reject(new Error("File load was aborted."));
+    xhr.ontimeout = () => reject(new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`));
+
+    try {
+      xhr.send();
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function loadArrayBufferFromPath(path) {
+  let fetchError = null;
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), DOC_LOAD_TIMEOUT_MS)
+    : null;
+
+  try {
+    const response = await fetch(path, {
+      cache: "no-store",
+      ...(controller ? { signal: controller.signal } : {})
+    });
+    if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
+    return await response.arrayBuffer();
+  } catch (error) {
+    fetchError = error?.name === "AbortError"
+      ? new Error(`Timed out loading file after ${DOC_LOAD_TIMEOUT_MS}ms.`)
+      : error;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+
+  try {
+    return await loadArrayBufferViaXhr(path);
+  } catch (xhrError) {
+    const fetchMessage = fetchError?.message || String(fetchError);
+    const xhrMessage = xhrError?.message || String(xhrError);
+    throw new Error(`${fetchMessage}; XHR fallback failed: ${xhrMessage}`);
   }
 }
 
@@ -2010,11 +2139,8 @@ async function queueLeftSearchIndexDoc(doc) {
   try {
     let extracted = "";
     if (doc?.path && getFileExtension(doc.fileName) === ".docx") {
-      const response = await fetch(doc.path);
-      if (response.ok) {
-        const buffer = await response.arrayBuffer();
-        extracted = await extractRawSearchTextFromArrayBuffer(buffer);
-      }
+      const buffer = await loadArrayBufferFromPath(doc.path);
+      extracted = await extractRawSearchTextFromArrayBuffer(buffer);
     } else if (getFileExtension(doc?.fileName) === ".docx" && (doc?.fileBase64 || doc?.docxBase64)) {
       const bytes = bytesFromBase64(doc.fileBase64 || doc.docxBase64);
       extracted = await extractRawSearchTextFromArrayBuffer(bytes.buffer);
@@ -2192,9 +2318,11 @@ async function renderDocxToHtmlWithCache(doc, loadBuffer) {
     const buffer = await loadBuffer();
     if (!buffer?.byteLength) throw new Error('Document appears to be empty.');
 
+    const mammothApi = await ensureMammothLoaded();
+
     await nextPaint();
 
-    const result = await mammoth.convertToHtml(
+    const result = await mammothApi.convertToHtml(
       { arrayBuffer: buffer },
       MAMMOTH_OPTIONS
     );
@@ -2902,9 +3030,7 @@ async function loadSiteDoc(doc) {
 
   try {
     const rendered = await renderDocxToHtmlWithCache(doc, async () => {
-      const response = await fetch(doc.path);
-      if (!response.ok) throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
-      return response.arrayBuffer();
+      return loadArrayBufferFromPath(doc.path);
     });
     setPreviewHtml(rendered.html);
   } catch (e) {
@@ -3400,6 +3526,9 @@ document.addEventListener("click", (e) => {
 renderUnifiedNav();
 setLibraryStatus();
 loadBundledDocs();
+ensureMammothLoaded().catch((error) => {
+  console.warn("DOCX renderer failed to load.", error);
+});
 setTheme(localStorage.getItem(THEME_KEY) || "light");
 hideFloatingScrollButtons();
 clearPageHash();
