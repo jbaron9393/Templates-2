@@ -532,6 +532,35 @@
       bottom: 156px;
       font-size: .82rem;
       padding: 7px 11px;
+      font-size: .82rem;
+    }
+    .floating-search-panel {
+      position: fixed;
+      right: 24px;
+      bottom: 156px;
+      z-index: 51;
+      width: min(360px, calc(100vw - 32px));
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(207,184,124,.9);
+      border-radius: 14px;
+      box-shadow: 0 14px 32px rgba(0,0,0,.18);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+    }
+    .floating-search-panel.hidden {
+      display: none;
+    }
+    .floating-search-panel-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .floating-search-panel-row input {
+      min-width: 0;
+      flex: 1;
     }
     .floating-search-panel {
       position: fixed;
@@ -977,6 +1006,7 @@ let leftSearchIndexing = new Set();
 let noteEditorState = { mode: "create", noteId: null, capturedAnchor: null };
 let previewContentType = "docx";
 let activePreviewObjectUrl = null;
+let floatingSearchPinnedOpen = false;
 
 // -------------------- Utilities --------------------
 function uuid() {
@@ -2154,6 +2184,7 @@ function updateSearchMeta() {
 }
 
 function runPreviewSearch() {
+  floatingSearchPinnedOpen = true;
   refreshSearchHighlights(true);
   updateFloatingSearchVisibility();
 }
