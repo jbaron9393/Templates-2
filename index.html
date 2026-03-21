@@ -532,16 +532,40 @@
       bottom: 156px;
       font-size: .82rem;
       padding: 7px 11px;
-    }
-    .search-float {
-      bottom: 112px;
-      padding: 7px 11px;
       font-size: .82rem;
     }
     .floating-search-panel {
       position: fixed;
       right: 24px;
       bottom: 156px;
+      z-index: 51;
+      width: min(360px, calc(100vw - 32px));
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(207,184,124,.9);
+      border-radius: 14px;
+      box-shadow: 0 14px 32px rgba(0,0,0,.18);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+    }
+    .floating-search-panel.hidden {
+      display: none;
+    }
+    .floating-search-panel-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .floating-search-panel-row input {
+      min-width: 0;
+      flex: 1;
+    }
+    .floating-search-panel {
+      position: fixed;
+      right: 24px;
+      bottom: 112px;
       z-index: 51;
       width: min(360px, calc(100vw - 32px));
       background: rgba(255,255,255,.96);
@@ -852,7 +876,6 @@
     Last updated February 2026
   </div>
 
-  <button class="to-top-btn search-float hidden" id="btnSearchFloat" aria-label="Open floating search">🔎 Search</button>
   <div class="floating-search-panel hidden" id="floatingSearchPanel" aria-hidden="true">
     <div class="floating-search-panel-row">
       <input id="floatingPreviewSearch" type="text" placeholder="Search within preview..." />
@@ -943,7 +966,6 @@ const previewMetaEl = $("#previewMeta");
 const previewSearchEl = $("#previewSearch");
 const searchMetaEl = $("#searchMeta");
 const btnToTopEl = $("#btnToTop");
-const btnSearchFloatEl = $("#btnSearchFloat");
 const floatingSearchPanelEl = $("#floatingSearchPanel");
 const floatingPreviewSearchEl = $("#floatingPreviewSearch");
 const floatingSearchMetaEl = $("#floatingSearchMeta");
@@ -2132,21 +2154,17 @@ function updateFloatingSearchMeta() {
 function updateFloatingSearchVisibility() {
   const isScrolling = window.scrollY > 0 || previewEl.scrollTop > 0;
   const hasQuery = !!previewSearchEl.value.trim();
-  const keepPanelOpen = floatingSearchPinnedOpen || hasQuery;
-  const showLauncher = isScrolling && (floatingSearchTransientVisible || keepPanelOpen);
-  const showPanel = isScrolling && keepPanelOpen;
+  const panelFocused = floatingSearchPanelEl.matches(":focus-within");
+  const showPanel = isScrolling && (floatingSearchTransientVisible || hasQuery || panelFocused);
 
-  btnSearchFloatEl.classList.toggle("hidden", !showLauncher);
   floatingSearchPanelEl.classList.toggle("hidden", !showPanel);
   floatingSearchPanelEl.setAttribute("aria-hidden", showPanel ? "false" : "true");
-  btnSearchFloatEl.textContent = "🔎 Search";
 }
 
 function clearPreviewSearch() {
   previewSearchEl.value = "";
   syncFloatingSearchInput();
   clearSearchHighlights();
-  floatingSearchPinnedOpen = false;
   updateFloatingSearchVisibility();
 }
 
@@ -2683,8 +2701,6 @@ function updateToTopVisibility() {
   if (topButtonHideTimer) clearTimeout(topButtonHideTimer);
   if (floatingSearchHideTimer) clearTimeout(floatingSearchHideTimer);
 
-  updateFloatingSearchVisibility();
-
   if (!isScrolling) {
     floatingSearchTransientVisible = false;
     updateFloatingSearchVisibility();
@@ -2815,19 +2831,6 @@ previewEl.addEventListener("scroll", updateToTopVisibility);
 window.addEventListener("scroll", updateToTopVisibility);
 $("#btnSearchFind").addEventListener("click", () => jumpToSearchMatch(true));
 $("#btnSearchClear").addEventListener("click", clearPreviewSearch);
-btnSearchFloatEl.addEventListener("click", () => {
-  const shouldOpen = floatingSearchPanelEl.classList.contains("hidden");
-  floatingSearchPinnedOpen = shouldOpen;
-  if (shouldOpen) {
-    syncFloatingSearchInput();
-    updateFloatingSearchVisibility();
-    floatingPreviewSearchEl.focus();
-    floatingPreviewSearchEl.select();
-  } else {
-    if (!previewSearchEl.value.trim()) floatingSearchPinnedOpen = false;
-    updateFloatingSearchVisibility();
-  }
-});
 btnFloatingSearchFindEl.addEventListener("click", () => {
   const nextQuery = floatingPreviewSearchEl.value;
   const queryChanged = previewSearchEl.value !== nextQuery;
@@ -2839,7 +2842,6 @@ btnFloatingSearchFindEl.addEventListener("click", () => {
   }
 
   jumpToSearchMatch(true);
-  floatingSearchPinnedOpen = true;
   updateFloatingSearchVisibility();
 });
 btnFloatingSearchClearEl.addEventListener("click", clearPreviewSearch);
@@ -2850,7 +2852,6 @@ previewSearchEl.addEventListener("input", () => {
 floatingPreviewSearchEl.addEventListener("input", () => {
   previewSearchEl.value = floatingPreviewSearchEl.value;
   refreshSearchHighlights(false);
-  floatingSearchPinnedOpen = true;
   updateFloatingSearchVisibility();
 });
 previewSearchEl.addEventListener("keydown", (e) => {
@@ -2870,7 +2871,6 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
     previewSearchEl.value = floatingPreviewSearchEl.value;
     if (queryChanged) runPreviewSearch();
     else jumpToSearchMatch(true);
-    floatingSearchPinnedOpen = true;
     updateFloatingSearchVisibility();
   }
   if (e.key === "Escape") {
@@ -2878,7 +2878,6 @@ floatingPreviewSearchEl.addEventListener("keydown", (e) => {
     if (previewSearchEl.value.trim()) {
       clearPreviewSearch();
     } else {
-      floatingSearchPinnedOpen = false;
       updateFloatingSearchVisibility();
     }
   }
