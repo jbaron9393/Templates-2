@@ -500,6 +500,14 @@
       border: none;
       display: block;
     }
+    .video-preview {
+      display: block;
+      width: 100%;
+      max-height: 75vh;
+      background: #000;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+    }
 
     .footer-note { padding: 10px 16px; border-top: 1px solid #eee; color:#777; font-size:.8rem; }
     .site-footer {
@@ -769,8 +777,8 @@
         <hr class="section-break" />
 
         <div class="row">
-          <label for="docFile">Upload a .docx, .pdf, or .jpg</label>
-          <input type="file" id="docFile" accept=".docx,.pdf,.jpg,.jpeg,.png" />
+          <label for="docFile">Upload a .docx, .pdf, .jpg, or .mp4</label>
+          <input type="file" id="docFile" accept=".docx,.pdf,.jpg,.jpeg,.png,.mp4" />
           <div class="muted">Client-side only. Stored in your browser (localStorage).</div>
           <div class="danger" id="err"></div>
         </div>
@@ -844,7 +852,7 @@
       </div>
 
       <div class="footer-note">
-        Render engine: Mammoth.js (DOCX → HTML), plus in-browser PDF and image preview for bundled and uploaded docs.
+        Render engine: Mammoth.js (DOCX → HTML), plus in-browser PDF, image, and MP4 video preview for bundled and uploaded docs.
       </div>
     </div>
 
@@ -872,7 +880,7 @@
 
         <div class="preview" id="preview">
           <div class="preview-inner">
-            <div class="muted">Upload a DOCX, PDF, or image and click it in the left sidebar.</div>
+            <div class="muted">Upload a DOCX, PDF, image, or MP4 video and click it in the left sidebar.</div>
           </div>
         </div>
       </div>
@@ -956,8 +964,8 @@ const DOC_TYPE_PRIORITY = {
   faq: 4,
   other: 5
 };
-const LOCAL_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
-const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png"];
+const LOCAL_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png", ".mp4"];
+const BUNDLED_ALLOWED_EXTENSIONS = [".docx", ".pdf", ".jpg", ".jpeg", ".png", ".mp4"];
 
 const BUNDLED_DOCS_INDEX_FALLBACK = {
   "categories": [
@@ -1351,7 +1359,7 @@ function nowISO() { return new Date().toISOString(); }
 
 function titleFromFileName(fileName) {
   return (fileName || "Untitled")
-    .replace(/\.(docx|pdf|jpe?g|png)$/i, "")
+    .replace(/\.(docx|pdf|jpe?g|png|mp4)$/i, "")
     .replaceAll(/[_-]+/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -1377,7 +1385,7 @@ function inferDocType({ title = "", fileName = "" } = {}) {
   if (/template|grossing|gross protocol|protocol/.test(haystack)) return "template";
   if (/checklist/.test(haystack)) return "checklist";
   if (/how\s*to|how-to|guide|troubleshooting|responsibilities|printing|saving|cancel/.test(haystack)) return "how-to";
-  if (/diagram|illustration|image|picture/.test(haystack)) return "reference";
+  if (/diagram|illustration|image|picture|video|mp4/.test(haystack)) return "reference";
   if (/faq/.test(haystack)) return "faq";
   return "other";
 }
@@ -1421,8 +1429,19 @@ function inferMimeTypeFromFileName(fileName) {
   if (ext === ".pdf") return "application/pdf";
   if (ext === ".jpg" || ext === ".jpeg") return "image/jpeg";
   if (ext === ".png") return "image/png";
+  if (ext === ".mp4") return "video/mp4";
   if (ext === ".docx") return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   return "application/octet-stream";
+}
+
+function isVideoExtension(ext) {
+  return ext === ".mp4";
+}
+
+function renderVideoPreview(src, title) {
+  return `<video class="video-preview" controls preload="metadata" src="${src}">
+    Sorry, your browser cannot play ${escapeHtml(title || "this video")} directly.
+  </video>`;
 }
 
 function normalizeLibraryDoc(doc) {
@@ -2800,6 +2819,12 @@ async function loadDoc(docId) {
     return;
   }
 
+  if (isVideoExtension(ext)) {
+    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
+    setPreviewHtml(renderVideoPreview(fileUrl, d.title), { objectUrl: fileUrl });
+    return;
+  }
+
   try {
     const result = await mammoth.convertToHtml(
       { arrayBuffer: bytes.buffer },
@@ -2845,6 +2870,11 @@ async function loadSiteDoc(doc) {
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
     setPreviewHtml(`<img src="${doc.path}" alt="${escapeHtml(doc.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`);
+    return;
+  }
+
+  if (isVideoExtension(ext)) {
+    setPreviewHtml(renderVideoPreview(doc.path, doc.title));
     return;
   }
 
@@ -2946,11 +2976,11 @@ async function addDocFromUpload() {
   setError("");
 
   const file = docFileEl.files?.[0];
-  if (!file) return setError("Choose a .docx, .pdf, or .jpg file first.");
+  if (!file) return setError("Choose a .docx, .pdf, .jpg, or .mp4 file first.");
 
   const ext = getFileExtension(file.name);
   if (!isLocalExtensionAllowed(file.name)) {
-    return setError("Only .docx, .pdf, .jpg, .jpeg, and .png files are supported.");
+    return setError("Only .docx, .pdf, .jpg, .jpeg, .png, and .mp4 files are supported.");
   }
 
   const title = (docTitleEl.value || "").trim() || titleFromFileName(file.name);
@@ -3003,7 +3033,7 @@ function deleteDoc(docId) {
     activeDocId = null;
     previewTitleEl.textContent = "Preview";
     previewMetaEl.textContent = "";
-    setPreviewHtml(`<div class="muted">Upload a DOCX, PDF, or image and click it in the left sidebar.</div>`);
+    setPreviewHtml(`<div class="muted">Upload a DOCX, PDF, image, or MP4 video and click it in the left sidebar.</div>`);
   }
   renderNotesList();
   saveLibrary();
