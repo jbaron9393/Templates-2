@@ -1458,6 +1458,27 @@ function renderVideoPreview(src, title) {
   `;
 }
 
+function renderBundledVideoLoadError(doc, detail = "") {
+  const safePath = escapeHtml(doc?.path || "");
+  const safeFileName = escapeHtml(doc?.fileName || "this MP4");
+  const detailsHtml = detail
+    ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(detail)}</div>`
+    : "";
+
+  setPreviewHtml(`
+    ${detailsHtml}
+    <div class="danger" style="margin-bottom:10px;">The MP4 file could not be loaded from the repository.</div>
+    <div class="muted" style="margin-bottom:8px;">
+      The site found an index.json entry for <strong>${safeFileName}</strong>, but the actual video file was not available at:
+    </div>
+    <code style="display:block;white-space:normal;overflow-wrap:anywhere;margin-bottom:10px;">${safePath}</code>
+    <div class="muted" style="margin-bottom:10px;">
+      Check that the MP4 was committed to GitHub in exactly the folder and file name shown in index.json. Capital letters, spaces, and punctuation must match exactly.
+    </div>
+    <a class="btn secondary compact" href="${safePath}" target="_blank" rel="noopener">Try opening repository file</a>
+  `);
+}
+
 function attachVideoErrorHandlers() {
   for (const video of previewEl.querySelectorAll("video.video-preview")) {
     video.addEventListener("error", () => {
@@ -2903,7 +2924,23 @@ async function loadSiteDoc(doc) {
   }
 
   if (isVideoExtension(ext)) {
-    setPreviewHtml(renderVideoPreview(doc.path, doc.title));
+    try {
+      const response = await fetch(doc.path, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`Failed to load ${doc.fileName} (${response.status})`);
+      }
+
+      const buffer = await response.arrayBuffer();
+      if (!buffer.byteLength) {
+        renderBundledVideoLoadError(doc, `"${doc.title}" appears to be empty.`);
+        return;
+      }
+
+      const fileUrl = URL.createObjectURL(new Blob([buffer], { type: getStoredMimeType(doc.fileName) }));
+      setPreviewHtml(renderVideoPreview(fileUrl, doc.title), { objectUrl: fileUrl });
+    } catch (e) {
+      renderBundledVideoLoadError(doc, e?.message || String(e));
+    }
     return;
   }
 
