@@ -286,6 +286,8 @@ Mammoth is the tool the website uses to turn Word `.docx` files into readable HT
 
 MP4 files can still be uploaded to GitHub and listed in `index.json`. The website will show them with a normal video player instead of sending them through Mammoth.
 
+If an MP4 shows a video box but will not play, the file may use a video/audio format that the browser cannot decode. Re-export the video as an MP4 using H.264 video and AAC audio, then upload that new file.
+
 ## Quick Checklist Before You Finish
 
 Before saving your changes, check these items:

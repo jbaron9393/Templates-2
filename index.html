@@ -1438,17 +1438,45 @@ function isVideoExtension(ext) {
   return ext === ".mp4";
 }
 
+function getStoredMimeType(fileName, preferredMime = "") {
+  const ext = getFileExtension(fileName);
+  if (isVideoExtension(ext)) return "video/mp4";
+  return preferredMime || inferMimeTypeFromFileName(fileName);
+}
+
 function renderVideoPreview(src, title) {
-  return `<video class="video-preview" controls preload="metadata" src="${src}">
-    Sorry, your browser cannot play ${escapeHtml(title || "this video")} directly.
-  </video>`;
+  const safeSrc = escapeHtml(src);
+  const safeTitle = escapeHtml(title || "video");
+  return `
+    <video class="video-preview" controls playsinline preload="auto" title="${safeTitle}">
+      <source src="${safeSrc}" type="video/mp4" />
+      Sorry, your browser cannot play ${safeTitle} directly.
+    </video>
+    <div class="muted" style="margin-top:8px;">
+      If the video does not start, use <a href="${safeSrc}" target="_blank" rel="noopener">Open / download video</a>.
+    </div>
+  `;
+}
+
+function attachVideoErrorHandlers() {
+  for (const video of previewEl.querySelectorAll("video.video-preview")) {
+    video.addEventListener("error", () => {
+      const existing = video.parentElement?.querySelector(".video-preview-error");
+      if (existing) return;
+      const message = document.createElement("div");
+      message.className = "danger video-preview-error";
+      message.style.marginTop = "8px";
+      message.textContent = "This MP4 could not be played in the browser. Try opening or downloading it, or re-export it as an H.264/AAC MP4.";
+      video.insertAdjacentElement("afterend", message);
+    });
+  }
 }
 
 function normalizeLibraryDoc(doc) {
   const normalizedType = getDocType(doc);
   const fileName = (doc?.fileName || "").toString();
   const fileBase64 = (doc?.fileBase64 || doc?.docxBase64 || "").toString();
-  const fileMime = (doc?.fileMime || inferMimeTypeFromFileName(fileName)).toString();
+  const fileMime = getStoredMimeType(fileName, (doc?.fileMime || "").toString());
   return {
     ...doc,
     docType: normalizedType,
@@ -2468,6 +2496,7 @@ function setPreviewHtml(html, { objectUrl = null } = {}) {
   previewEl.innerHTML = `<div class="preview-inner">${html || '<div class="muted">No content.</div>'}</div>`;
   refreshSearchHighlights();
   renderNoteMarkers();
+  attachVideoErrorHandlers();
   updateAddNoteButtonState();
 }
 
@@ -2814,13 +2843,13 @@ async function loadDoc(docId) {
   }
 
   if ([".jpg", ".jpeg", ".png"].includes(ext)) {
-    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
+    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: getStoredMimeType(d.fileName, d.fileMime) }));
     setPreviewHtml(`<img src="${fileUrl}" alt="${escapeHtml(d.title)}" style="max-width:100%;height:auto;display:block;margin:0 auto;" />`, { objectUrl: fileUrl });
     return;
   }
 
   if (isVideoExtension(ext)) {
-    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: d.fileMime || inferMimeTypeFromFileName(d.fileName) }));
+    const fileUrl = URL.createObjectURL(new Blob([bytes], { type: getStoredMimeType(d.fileName, d.fileMime) }));
     setPreviewHtml(renderVideoPreview(fileUrl, d.title), { objectUrl: fileUrl });
     return;
   }
@@ -3000,7 +3029,7 @@ async function addDocFromUpload() {
     addedAtISO: nowISO(),
     docType,
     fileBase64: b64,
-    fileMime: file.type || inferMimeTypeFromFileName(file.name),
+    fileMime: getStoredMimeType(file.name, file.type),
     docxBase64: ext === ".docx" ? b64 : ""
   };
 
@@ -3095,7 +3124,7 @@ function importLibraryFromFile(file) {
           addedAtISO: d.addedAtISO || nowISO(),
           docType: normalizeDocType(d.docType) || inferDocType({ title, fileName }),
           fileBase64,
-          fileMime: d.fileMime || inferMimeTypeFromFileName(fileName),
+          fileMime: getStoredMimeType(fileName, d.fileMime),
           docxBase64: ext === ".docx" ? ((d.docxBase64 || fileBase64 || "").toString()) : ""
         };
       }).filter((d) => d.fileBase64 && isLocalExtensionAllowed(d.fileName));
