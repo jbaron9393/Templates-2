@@ -1,6 +1,6 @@
 # How to Update Site Documents (No Coding Needed)
 
-This folder contains the Word documents, PDFs, and images that appear in the Grossing Manual website. The website reads the document list from `index.json`, so the file names and titles in that file must stay accurate.
+This folder contains the Word documents, PDFs, images, and MP4 videos that appear in the Grossing Manual website. The website reads the document list from `index.json`, so the file names and titles in that file must stay accurate.
 
 ## The Most Important Rule
 
@@ -119,7 +119,7 @@ Notice that the `title` did not have to change. The `title` is what people see o
 
 Use these steps when you want to add a brand-new document, PDF, image, or MP4 video to the website.
 
-1. Decide which category/folder the document belongs in.
+1. Decide which category/folder the file belongs in.
    - Example folders include `Breast`, `Frozens`, `GI 1,2&3`, `GYN-OB 1&2/GYN1`, and `Heart`.
 2. Put the new file inside the correct folder under `docs/word-docs/`.
 3. Open `docs/word-docs/index.json`.
@@ -148,11 +148,17 @@ then add this entry to the `files` list in `index.json`:
 }
 ```
 
-If you add an MP4 video instead, use the same pattern:
+### Example New Video
+
+If you add an MP4 video, use the same pattern.
+
+If you add this new video:
 
 ```text
 docs/word-docs/Frozens/Cryostat Cleaning Video.mp4
 ```
+
+then add this entry to the `files` list in `index.json`:
 
 ```json
 {
@@ -179,7 +185,7 @@ Every document entry in `index.json` usually looks like this:
 This is the exact location of the file inside `docs/word-docs/`.
 
 - It must include the folder name if the file is inside a folder.
-- It must include the full file name and extension, such as `.docx`, `.pdf`, or `.mp4`.
+- It must include the full file name and extension, such as `.docx`, `.pdf`, `.jpg`, `.png`, or `.mp4`.
 - Capital letters, spaces, punctuation, and spelling must match the real file exactly.
 
 ### `title`
@@ -187,7 +193,7 @@ This is the exact location of the file inside `docs/word-docs/`.
 This is the display name people see on the website.
 
 - Changing `title` changes the name shown on the website.
-- Changing `title` does **not** rename the actual Word document.
+- Changing `title` does **not** rename the actual Word document, PDF, image, or video.
 - You can make the title cleaner than the file name.
 
 ### `category`
@@ -203,7 +209,7 @@ This controls which section the document appears under on the website.
 Only do this if none of the existing categories fit.
 
 1. Create a new folder inside `docs/word-docs/`.
-2. Put the new document inside that folder.
+2. Put the new document, PDF, image, or video inside that folder.
 3. Open `docs/word-docs/index.json`.
 4. Add the new category name to the `categories` list near the top.
 5. Add the document entry to the `files` list.
@@ -233,6 +239,47 @@ Then add this entry to the `files` list:
 }
 ```
 
+## Add a New Folder in GitHub
+
+GitHub does not support creating empty folders. A folder must contain at least one file, such as a `README.md`, before GitHub will create and track it.
+
+Use these steps to create a new folder in the Grossing Manual repository:
+
+1. Navigate to the location where you want the new folder to be created.
+   - For site documents, this will usually be `docs/word-docs/`.
+2. Click **Add file**.
+3. Click **Create new file**.
+4. In the filename field, type the new folder name followed by `/README.md`.
+
+   Example:
+
+   ```text
+   New Folder/README.md
+   ```
+
+5. Add a brief description of the folder in the README file.
+6. Scroll to the bottom of the page.
+7. Enter a commit message describing the addition.
+8. Click **Commit new file**.
+
+After committing, the new folder will appear in the repository and can be used to store documents and other files.
+
+### Examples
+
+To create a folder named `Breast`, type:
+
+```text
+Breast/README.md
+```
+
+To create a folder named `Test`, type:
+
+```text
+Test/README.md
+```
+
+If you are creating a new site-document category, remember that creating the folder is not enough. You still need to add the category and file entry to `docs/word-docs/index.json`.
+
 ## Important Note About MP4 Videos and Mammoth
 
 Mammoth is the tool the website uses to turn Word `.docx` files into readable HTML previews. Mammoth only works with Word documents; it cannot read or convert `.mp4` videos.
@@ -243,11 +290,12 @@ MP4 files can still be uploaded to GitHub and listed in `index.json`. The websit
 
 Before saving your changes, check these items:
 
-- The document is inside `docs/word-docs/` or one of its folders.
-- The document file name in `index.json` matches the real file name exactly.
+- The document, PDF, image, or video is inside `docs/word-docs/` or one of its folders.
+- The file name in `index.json` matches the real file name exactly.
 - The file extension is included, such as `.docx`, `.pdf`, `.jpg`, `.jpeg`, `.png`, or `.mp4`.
 - The `title` is spelled the way you want it to appear on the website.
 - The `category` is spelled the same way everywhere it is used.
+- If you added a new folder/category, the category is also listed in the `categories` list near the top of `index.json`.
 - Commas are correct in `index.json`.
   - Every entry needs a comma after it, except the last entry in the list.
 
@@ -261,10 +309,10 @@ Avoid these mistakes:
 - Expecting Mammoth to process `.mp4` videos. Mammoth only processes `.docx`; videos use the browser video player.
 - Forgetting the folder name in `fileName`.
 - Adding extra spaces at the beginning or end of a file name.
+- Creating a new folder but forgetting to add the new category and file entry to `index.json`.
 - Changing a category name in one place but not the other.
 - Removing quotation marks or commas from `index.json`.
 
 ## Safe Editing Tip
 
-If you are not sure what to change, copy an existing entry in `index.json` from the same category, paste it nearby, and then only change the `fileName` and `title` for the new document.
-
+If you are not sure what to change, copy an existing entry in `index.json` from the same category, paste it nearby, and then only change the `fileName`, `title`, and `category` values for the new document.
