@@ -1459,21 +1459,27 @@ function renderVideoPreview(src, title) {
 }
 
 function renderBundledVideoLoadError(doc, detail = "") {
+  const rawFileName = (doc?.fileName || "").toString();
+  const slashIndex = rawFileName.lastIndexOf("/");
+  const expectedFolder = slashIndex >= 0 ? rawFileName.slice(0, slashIndex) : "";
+  const expectedName = slashIndex >= 0 ? rawFileName.slice(slashIndex + 1) : rawFileName;
   const safePath = escapeHtml(doc?.path || "");
-  const safeFileName = escapeHtml(doc?.fileName || "this MP4");
+  const safeFileName = escapeHtml(rawFileName || "this MP4");
+  const safeExpectedFolder = escapeHtml(expectedFolder);
+  const safeExpectedName = escapeHtml(expectedName || "the MP4 file");
   const detailsHtml = detail
     ? `<div class="danger" style="margin-bottom:10px;">${escapeHtml(detail)}</div>`
     : "";
 
   setPreviewHtml(`
     ${detailsHtml}
-    <div class="danger" style="margin-bottom:10px;">The MP4 file could not be loaded from the repository.</div>
+    <div class="danger" style="margin-bottom:10px;">The MP4 file is not on the deployed website at the path listed in index.json.</div>
     <div class="muted" style="margin-bottom:8px;">
-      The site found an index.json entry for <strong>${safeFileName}</strong>, but the actual video file was not available at:
+      This is not a video-player problem yet. The site found an index.json entry for <strong>${safeFileName}</strong>, but the actual video file was not available at:
     </div>
     <code style="display:block;white-space:normal;overflow-wrap:anywhere;margin-bottom:10px;">${safePath}</code>
     <div class="muted" style="margin-bottom:10px;">
-      Check that the MP4 was committed to GitHub in exactly the folder and file name shown in index.json. Capital letters, spaces, and punctuation must match exactly.
+      To fix it, upload <strong>${safeExpectedName}</strong> into <strong>docs/word-docs${safeExpectedFolder ? `/${safeExpectedFolder}` : ""}</strong> in GitHub, or edit index.json so fileName points to the folder and file name that actually exist. Capital letters, spaces, and punctuation must match exactly.
     </div>
     <a class="btn secondary compact" href="${safePath}" target="_blank" rel="noopener">Try opening repository file</a>
   `);

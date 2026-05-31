@@ -288,7 +288,35 @@ MP4 files can still be uploaded to GitHub and listed in `index.json`. The websit
 
 If an MP4 shows a video box but will not play, the file may use a video/audio format that the browser cannot decode. Re-export the video as an MP4 using H.264 video and AAC audio, then upload that new file.
 
-If opening the video link shows **Not Found**, the `index.json` entry exists but the actual `.mp4` file is missing from GitHub or the path does not match exactly. Check the folder name, file name, capitalization, spaces, punctuation, and `.mp4` extension.
+If opening the video link shows **Not Found**, the `index.json` entry exists but the actual `.mp4` file is missing from GitHub or the path does not match exactly. This is not a video-player problem. The website cannot play the video until the real `.mp4` file exists at the exact path listed in `index.json`.
+
+For example, this `index.json` entry:
+
+```json
+{
+  "fileName": "Neuro and Eye/Monkeys.mp4",
+  "title": "Monkeys",
+  "category": "Neuro and Eye"
+}
+```
+
+requires the actual file to be committed here:
+
+```text
+docs/word-docs/Neuro and Eye/Monkeys.mp4
+```
+
+To fix a **Not Found** MP4:
+
+1. In GitHub, open the exact folder listed before the file name.
+   - Example: `docs/word-docs/Neuro and Eye/`
+2. Click **Add file**.
+3. Click **Upload files**.
+4. Upload the real `.mp4` file.
+5. Make sure the file name matches `index.json` exactly.
+   - Example: `Monkeys.mp4`
+6. Commit the upload.
+7. Wait for the site to redeploy, then refresh the page.
 
 ## Quick Checklist Before You Finish
 
