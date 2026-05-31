@@ -4,7 +4,7 @@
     "BM-Heme-Lymphoma",
     "Breast",
     "BST",
-    "Derm",
+    "Dermstest",
     "Faxitron",
     "Frozens",
     "GI",
@@ -306,6 +306,11 @@
     {
       "fileName": "Neuro and Eye/Neuro Templates.docx",
       "title": "Neuro Templates",
+      "category": "Neuro and Eye"
+    },
+    {
+      "fileName": "Neuro and Eye/Monkeys.mp4",
+      "title": "Monkeys",
       "category": "Neuro and Eye"
     },
     {
