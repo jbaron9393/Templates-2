@@ -289,6 +289,51 @@
       outline: 3px solid rgba(207,184,124,.8);
       border-radius: 4px;
     }
+    .note-callout {
+      display: inline-block;
+      vertical-align: top;
+      width: clamp(360px, 72%, 780px);
+      max-width: calc(100% - 10px);
+      margin: 6px 0 6px 10px;
+      padding: 10px 12px;
+      border: 2px solid #CFB87C;
+      border-radius: 10px;
+      background: #fff8e7;
+      color: #222;
+      box-shadow: 0 8px 22px rgba(0,0,0,.14);
+      font-size: .88rem;
+      line-height: 1.35;
+      white-space: normal;
+    }
+    .note-callout-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:6px;
+      font-weight:800;
+    }
+    .note-callout-title {
+      overflow-wrap:anywhere;
+    }
+    .note-callout-close {
+      border:0;
+      background:transparent;
+      color:inherit;
+      cursor:pointer;
+      font-size:1rem;
+      line-height:1;
+      padding:2px 4px;
+      border-radius:6px;
+    }
+    .note-callout-close:hover {
+      background: rgba(0,0,0,.08);
+    }
+    .note-callout-text {
+      display:block;
+      white-space: pre-wrap;
+      overflow-wrap:anywhere;
+    }
     @keyframes notePulse {
       0% { background: rgba(207,184,124,.35); }
       100% { background: transparent; }
@@ -720,6 +765,15 @@
       background: #3a3528;
       border-color: #7e6b3a;
       color: #f0dca8;
+    }
+    body.dark .note-callout {
+      background: #3a3528;
+      border-color: #7e6b3a;
+      color: #f0dca8;
+      box-shadow: 0 8px 22px rgba(0,0,0,.35);
+    }
+    body.dark .note-callout-close:hover {
+      background: rgba(255,255,255,.12);
     }
     body.dark .modal {
       background: #243244;
@@ -1816,6 +1870,45 @@ function highlightAnchorElement(el) {
   setTimeout(() => el.classList.remove('note-highlight'), 2500);
 }
 
+function clearNoteCallouts() {
+  for (const callout of previewEl.querySelectorAll('.note-callout')) callout.remove();
+}
+
+function showNoteCallout(note, target) {
+  if (!note || !target) return;
+  clearNoteCallouts();
+
+  const callout = document.createElement('span');
+  callout.className = 'note-callout';
+  callout.setAttribute('role', 'note');
+  callout.setAttribute('aria-label', 'Selected note text');
+
+  const header = document.createElement('span');
+  header.className = 'note-callout-head';
+
+  const title = document.createElement('span');
+  title.className = 'note-callout-title';
+  title.textContent = (note.title || note.category || 'Note').toString();
+
+  const closeButton = document.createElement('button');
+  closeButton.className = 'note-callout-close';
+  closeButton.type = 'button';
+  closeButton.setAttribute('aria-label', 'Hide note text');
+  closeButton.textContent = '×';
+  closeButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    callout.remove();
+  });
+
+  const text = document.createElement('span');
+  text.className = 'note-callout-text';
+  text.textContent = (note.text || '').toString();
+
+  header.append(title, closeButton);
+  callout.append(header, text);
+  target.appendChild(callout);
+}
+
 function normalizeTextForMatch(value = '') {
   return value.toString().replace(/\s+/g, ' ').trim().toLowerCase();
 }
@@ -1874,6 +1967,7 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
 
 function jumpToNote(note) {
   if (!note) return false;
+  clearNoteCallouts();
   let target = null;
   const anchor = note.anchor || {};
 
@@ -1889,6 +1983,7 @@ function jumpToNote(note) {
   if (target) {
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     highlightAnchorElement(target);
+    showNoteCallout(note, target);
     return true;
   }
 
