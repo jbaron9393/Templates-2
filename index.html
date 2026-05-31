@@ -292,7 +292,8 @@
     .note-callout {
       display: inline-block;
       vertical-align: top;
-      max-width: min(340px, 100%);
+      width: clamp(360px, 72%, 780px);
+      max-width: calc(100% - 10px);
       margin: 6px 0 6px 10px;
       padding: 10px 12px;
       border: 2px solid #CFB87C;
