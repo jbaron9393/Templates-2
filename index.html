@@ -274,6 +274,11 @@
       line-height:1.3;
     }
     .note-actions { display:flex; gap:6px; flex-wrap:wrap; }
+    .btn.toggle-active {
+      background:#CFB87C;
+      color:#000;
+      border-color:#CFB87C;
+    }
     .note-marker {
       margin-left:6px;
       font-size:.8rem;
@@ -894,6 +899,7 @@
             <div class="notes-body">
               <div class="notes-toolbar">
                 <button class="btn secondary compact" id="btnNewNote">+ New Note</button>
+                <button class="btn secondary compact" id="btnToggleNotesInDoc" type="button">Show Notes in Doc</button>
                 <label style="display:flex;align-items:center;gap:6px;font-weight:600;">
                   <input id="notesShowAll" type="checkbox" />
                   <span>Show Notes</span>
@@ -1349,6 +1355,7 @@ const leftSearchEl = $("#leftSearch");
 const leftSearchMetaEl = $("#leftSearchMeta");
 const notesListEl = $("#notesList");
 const notesShowAllEl = $("#notesShowAll");
+const btnToggleNotesInDocEl = $("#btnToggleNotesInDoc");
 const notesCategoryEl = $("#notesCategory");
 const notesHeadEl = $("#notesHead");
 const notesCountEl = $("#notesCount");
@@ -1385,6 +1392,7 @@ const noteTextEl = $("#noteText");
 
 let state = loadLibrary();
 let notesOverlay = loadNotesOverlay();
+let showAllNotesInDoc = false;
 let activeDocId = null;
 let activeSiteDocPath = null;
 let searchMatchGroups = [];
@@ -1808,6 +1816,7 @@ function deleteNote(noteId) {
   saveNotesOverlay();
   renderNotesList();
   renderNoteMarkers();
+  renderVisibleNoteCallouts();
   refreshNoteCategorySuggestions();
 }
 
@@ -1861,6 +1870,7 @@ function saveNoteFromModal() {
   closeNoteModal();
   renderNotesList();
   renderNoteMarkers();
+  renderVisibleNoteCallouts();
   refreshNoteCategorySuggestions();
 }
 
@@ -1874,12 +1884,30 @@ function clearNoteCallouts() {
   for (const callout of previewEl.querySelectorAll('.note-callout')) callout.remove();
 }
 
-function showNoteCallout(note, target) {
+function resolveNoteTarget(note) {
+  if (!note) return null;
+  let target = null;
+  const anchor = note.anchor || {};
+
+  if (anchor.selector) {
+    try { target = previewEl.querySelector(anchor.selector); } catch {}
+  }
+  if (!target && anchor.quote) target = findElementByQuote(anchor.quote, anchor.contextBefore, anchor.contextAfter);
+
+  if (!target && anchor.type === 'heading' && anchor.quote) {
+    target = findElementByQuote(anchor.quote);
+  }
+
+  return target;
+}
+
+function showNoteCallout(note, target, { clearExisting = true } = {}) {
   if (!note || !target) return;
-  clearNoteCallouts();
+  if (clearExisting) clearNoteCallouts();
 
   const callout = document.createElement('span');
   callout.className = 'note-callout';
+  callout.dataset.noteId = note.id || '';
   callout.setAttribute('role', 'note');
   callout.setAttribute('aria-label', 'Selected note text');
 
@@ -1907,6 +1935,28 @@ function showNoteCallout(note, target) {
   header.append(title, closeButton);
   callout.append(header, text);
   target.appendChild(callout);
+}
+
+function renderVisibleNoteCallouts() {
+  clearNoteCallouts();
+  if (!showAllNotesInDoc) return;
+
+  const ctx = getActiveDocContext();
+  if (!ctx || previewContentType !== 'docx') return;
+
+  const docNotes = (notesOverlay.notes || []).filter((n) => n.docKey === ctx.docKey);
+  for (const note of docNotes) {
+    const target = resolveNoteTarget(note);
+    if (target) showNoteCallout(note, target, { clearExisting: false });
+  }
+}
+
+function updateNotesInDocToggle() {
+  if (!btnToggleNotesInDocEl) return;
+  const canShow = !!getActiveDocContext() && previewContentType === 'docx';
+  btnToggleNotesInDocEl.disabled = !canShow;
+  btnToggleNotesInDocEl.classList.toggle('toggle-active', showAllNotesInDoc);
+  btnToggleNotesInDocEl.textContent = showAllNotesInDoc ? 'Hide Notes in Doc' : 'Show Notes in Doc';
 }
 
 function normalizeTextForMatch(value = '') {
@@ -1967,25 +2017,21 @@ function findElementByQuote(quote = '', contextBefore = '', contextAfter = '') {
 
 function jumpToNote(note) {
   if (!note) return false;
-  clearNoteCallouts();
-  let target = null;
+  const target = resolveNoteTarget(note);
   const anchor = note.anchor || {};
-
-  if (anchor.selector) {
-    try { target = previewEl.querySelector(anchor.selector); } catch {}
-  }
-  if (!target && anchor.quote) target = findElementByQuote(anchor.quote, anchor.contextBefore, anchor.contextAfter);
-
-  if (!target && anchor.type === 'heading' && anchor.quote) {
-    target = findElementByQuote(anchor.quote);
-  }
 
   if (target) {
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
     highlightAnchorElement(target);
-    showNoteCallout(note, target);
+    if (showAllNotesInDoc) {
+      renderVisibleNoteCallouts();
+    } else {
+      showNoteCallout(note, target);
+    }
     return true;
   }
+
+  clearNoteCallouts();
 
   if (typeof anchor.scrollTop === 'number') {
     previewEl.scrollTo({ top: anchor.scrollTop, behavior: 'smooth' });
@@ -2070,6 +2116,8 @@ function updateAddNoteButtonState() {
     btnAddNoteEl.disabled = !hasDoc;
     btnAddNoteEl.textContent = hasSelection ? 'Add Note to Selection' : 'Add Note';
   }
+
+  updateNotesInDocToggle();
 
   if (!btnQuickNoteEl) return;
   const canQuickAdd = hasDoc && hasSelection && previewContentType === 'docx';
@@ -2618,6 +2666,7 @@ function setPreviewHtml(html, { objectUrl = null } = {}) {
   previewEl.innerHTML = `<div class="preview-inner">${html || '<div class="muted">No content.</div>'}</div>`;
   refreshSearchHighlights();
   renderNoteMarkers();
+  renderVisibleNoteCallouts();
   attachVideoErrorHandlers();
   updateAddNoteButtonState();
 }
@@ -3308,6 +3357,7 @@ function importLibraryFromFile(file) {
       renderUnifiedNav();
       renderNotesList();
       renderNoteMarkers();
+      renderVisibleNoteCallouts();
       refreshNoteCategorySuggestions();
       alert(`Imported ${normalizedDocs.length} doc(s) and ${importedNotes} note(s).`);
     } catch (e) {
@@ -3437,6 +3487,11 @@ btnAddNoteEl.addEventListener("click", openCreateNoteFromSelection);
 btnNewNoteEl.addEventListener("click", openCreateNoteFromSelection);
 btnQuickNoteEl.addEventListener("click", openCreateNoteFromSelection);
 notesShowAllEl.addEventListener("change", renderNotesList);
+btnToggleNotesInDocEl.addEventListener("click", () => {
+  showAllNotesInDoc = !showAllNotesInDoc;
+  updateNotesInDocToggle();
+  renderVisibleNoteCallouts();
+});
 notesHeadEl.addEventListener("click", () => {
   notesCategoryEl.classList.toggle("open");
 });
